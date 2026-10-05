@@ -1,0 +1,7 @@
+/target/
+/.toolchain/
+/dist/
+/local/
+*.log
+/config.json
+

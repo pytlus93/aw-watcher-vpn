@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "poll_seconds": 5,
+  "profiles": [
+    {
+      "id": "customer-a",
+      "customer_hint": "Synthetic Customer A",
+      "rules": {
+        "description_contains": ["Synthetic VPN Adapter"],
+        "dns_suffixes": ["customer-a.example"],
+        "route_prefixes": ["203.0.113.0/24"]
+      },
+      "destinations": ["203.0.113.10"]
+    }
+  ]
+}
