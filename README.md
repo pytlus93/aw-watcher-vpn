@@ -187,8 +187,9 @@ old watcher and replace its executable to switch; the config needs no changes.
 }
 ```
 
-No active tunnels produces `connections: []`. Collection failure emits no
-heartbeat, leaving a gap rather than reporting a disconnection. A changed set
+No active tunnels produces no AW heartbeat. Collection failure also emits no
+heartbeat, leaving a gap. An empty set is retained only in local management
+state and diagnostic output. A changed nonempty set
 starts a new event; unchanged samples extend its duration through AW heartbeats.
 Raw addresses, routes, DNS server IPs, descriptions and credentials are not sent
 to AW. Adapter IDs/names, customer labels and optional DNS suffix suggestions
@@ -205,7 +206,8 @@ events in the planned review UI or inspect them through AW's bucket API.
 ## Limits and validation
 
 Validated on 2026-10-05 using Rust 1.99.0 and the installed MSVC toolchain:
-22 automated tests pass, including mixed known/unknown connections, exclusions,
+23 automated tests pass, including suppression of empty heartbeats,
+mixed known/unknown connections, exclusions,
 named merging, replacement and Windows atomic
 backup handling. Clippy passes with warnings denied, and the release
 binary's embedded Windows PowerShell collector and synthetic-profile dry run
@@ -222,7 +224,7 @@ reachability. Profiles with identical adapter/routes/DNS cannot be distinguished
 generically. Rules may also match a customer's office LAN. DNS suffixes are
 adapter-specific; NRPT, WFP rules, proxies and alternate routing compartments
 are not collected. Collection is not atomic while a VPN changes configuration.
-Reconnects may produce short empty-context intervals. No vendor-wide compatibility
+Reconnects may produce short gaps. No vendor-wide compatibility
 claim is made before real connect/disconnect captures validate each profile.
 
 Validate standard-user capture, connect/disconnect, reconnect, sleep/resume,

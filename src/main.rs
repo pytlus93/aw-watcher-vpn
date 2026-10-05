@@ -137,6 +137,9 @@ impl Adapter {
         }
     }
     fn enqueue(&mut self, timestamp: DateTime<Utc>, data: Context) {
+        if data.connections.is_empty() {
+            return;
+        }
         if self.queue.len() >= 512 {
             self.queue.pop_front();
             eprintln!("AW queue full: oldest sample dropped");
@@ -811,5 +814,13 @@ mod tests {
         assert_eq!(aw.queue.len(), 512);
         aw.flush();
         assert_eq!(aw.queue.len(), 502);
+    }
+    #[test]
+    fn no_connections_produces_no_aw_requests() {
+        let mut aw = Adapter::new(1, "synthetic".into(), 5);
+        aw.enqueue(Utc::now(), Context::new(vec![]));
+        aw.flush();
+        assert!(aw.queue.is_empty());
+        assert!(aw.created.is_empty());
     }
 }
