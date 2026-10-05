@@ -69,6 +69,7 @@ Rules within each category behave as follows:
 | Category | Meaning |
 |---|---|
 | `adapter_ids` | Any exact ID, case-insensitive |
+| `adapter_names` | Any exact connection/adapter name, case-insensitive |
 | `description_contains` | Any case-insensitive substring |
 | `dns_suffixes` | Any exact suffix; ignores case and trailing dot |
 | `dns_servers` | All specified numeric IPs must be present |
@@ -78,6 +79,9 @@ All nonempty categories must match **the same operational adapter**, which must
 have a usable unicast address. Loopback, unspecified, multicast and link-local
 addresses alone do not count. At least one rule is required. Route prefixes are
 exact matches, not subnet-containment rules. Config/schema typos are rejected.
+Before/after learning now selects at most three non-host, non-default route
+prefixes instead of requiring every changed route. Older profiles retain their
+original rules until explicitly replaced.
 
 `destinations` optionally contains numeric internal IP addresses. The core
 estimates the best route by longest prefix, then route + interface metric.
@@ -113,17 +117,45 @@ assignment. A generic/shared DNS suffix can be a poor suggestion.
 By default, the watcher remembers new unnamed candidates in
 `<config>.discovered.json` and shows a Windows balloon notification once per
 candidate per run. Windows notification settings can suppress the balloon.
-The notification does not open a naming dialog; name the candidate using its ID
-from the watcher output or discovery file:
+Click the balloon or double-click the naming helper's tray icon to open the
+window listing **all remembered unnamed connections**, including previously
+seen disconnected ones. It refreshes every five seconds; status refers to the
+last collected context. Select a connection, enter a customer name, and save.
+You can also open it while the watcher runs:
+
+```powershell
+.\aw-watcher-vpn.exe manage local\config.json
+```
+
+Existing customer names are offered in the dropdown. Reusing an existing name
+requires selecting "Update an existing customer fingerprint" and confirming
+replacement. This preserves the profile ID, history and destinations. Possible
+matches based on an adapter ID/name or customer-name resemblance are suggestions,
+not automatic reassignment. A changed GUID or overly restrictive old fingerprint
+can otherwise make an already learned connection appear unnamed.
+
+The CLI remains available:
 
 ```powershell
 .\aw-watcher-vpn.exe name local\config.json "<connection-id>" --name "Customer A"
 ```
 
-This promotes the stored adapter fingerprint into the main config, with a backup.
-The running watcher reloads customer rules each poll. Review this adapter-ID rule
-for clients that reuse one adapter for different customers; refine it with stable
+Add `--replace` to update an existing customer using the naming command.
+This promotes the stored connection name into the main config, with a backup.
+The running watcher reloads customer rules each poll. Review this connection-name rule
+for clients that reuse one connection name for different customers; refine it with stable
 DNS/routes or use before/after learning for those clients.
+Naming upgrades older discoveries that stored only an adapter GUID to an exact
+`adapter_names` rule, allowing the same connection to recreate its adapter.
+No old customer profile is automatically weakened or overwritten.
+
+For a future Windows service, run `manage` in your desktop session using the
+service's absolute config path and file permissions that allow the UI to update
+it. Notification UI belongs to an interactive desktop session; launching a
+notification process from service session 0 does not display it on your desktop.
+Service installation and AW tray module registration are not included here.
+The local `<config>.context.json` file supplies the helper's last observed state;
+it is replaced on context changes and cleared on collection failure.
 
 Disable either feature independently:
 
@@ -173,13 +205,17 @@ events in the planned review UI or inspect them through AW's bucket API.
 ## Limits and validation
 
 Validated on 2026-10-05 using Rust 1.99.0 and the installed MSVC toolchain:
-19 automated tests pass, including mixed known/unknown connections, exclusions,
+22 automated tests pass, including mixed known/unknown connections, exclusions,
 named merging, replacement and Windows atomic
 backup handling. Clippy passes with warnings denied, and the release
 binary's embedded Windows PowerShell collector and synthetic-profile dry run
 pass. The ZIP is `dist/aw-watcher-vpn-0.1.0-windows-x64.zip`. Automated AW delivery
 tests use a real loopback mock HTTP server. No real VPN connect/disconnect cycle
 or actual ActivityWatch server session has been validated yet.
+The synthetic Windows Forms test `tests/management-ui.ps1` validates listing two
+unnamed connections, saving a label, and removing the resolved row. Its rendered
+form was visually inspected. Desktop notification clicks and a real Windows
+service session have not been validated.
 
 An installed/up tunnel with stale routes is not proof of authentication or
 reachability. Profiles with identical adapter/routes/DNS cannot be distinguished

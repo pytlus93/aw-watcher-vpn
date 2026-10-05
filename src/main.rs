@@ -10,16 +10,18 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+mod management;
+fn parse_json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, String> {
+    serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())
+}
 
 fn read_config(path: &str) -> Result<Config, String> {
-    let c: Config = serde_json::from_str(&fs::read_to_string(path).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
+    let c: Config = parse_json(&fs::read_to_string(path).map_err(|e| e.to_string())?)?;
     c.validate()?;
     Ok(c)
 }
 fn read_snapshot(path: &str) -> Result<Snapshot, String> {
-    let s: Snapshot = serde_json::from_str(&fs::read_to_string(path).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
+    let s: Snapshot = parse_json(&fs::read_to_string(path).map_err(|e| e.to_string())?)?;
     if s.schema_version != 1 {
         return Err("unsupported snapshot schema".into());
     }
@@ -98,7 +100,7 @@ struct Pending {
     timestamp: DateTime<Utc>,
     data: Context,
 }
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Context {
     schema_version: u32,
     connections: Vec<Connection>,
@@ -210,36 +212,14 @@ struct Discovered {
 }
 fn read_discovered(path: &str) -> Result<Vec<Discovered>, String> {
     match fs::read_to_string(path) {
-        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
+        Ok(text) => parse_json(&text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(vec![]),
         Err(e) => Err(e.to_string()),
     }
 }
 #[cfg(windows)]
 fn notify_unknown(name: &str) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    let message = format!("New VPN connection: {name}. Name it with aw-watcher-vpn name <config> <connection-id> --name <customer>. See watcher output for its ID.");
-    let encoded = base64::engine::general_purpose::STANDARD.encode(message.as_bytes());
-    let script = format!("Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; $n.Visible = $true; $m = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}')); $n.ShowBalloonTip(5000, 'ActivityWatch VPN', $m, [System.Windows.Forms.ToolTipIcon]::Info); Start-Sleep -Seconds 6; $n.Dispose()");
-    let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
-    let exe =
-        std::path::PathBuf::from(std::env::var_os("SystemRoot").ok_or("SystemRoot unavailable")?)
-            .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-    Command::new(exe)
-        .args([
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-EncodedCommand",
-            &base64::engine::general_purpose::STANDARD.encode(bytes),
-        ])
-        .creation_flags(0x08000000)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    management::launch(name, true)
 }
 #[cfg(not(windows))]
 fn notify_unknown(_name: &str) -> Result<(), String> {
@@ -318,7 +298,7 @@ fn run(
                                     name: connection.name.clone(),
                                     suggested_name: connection.suggested_name.clone(),
                                     rules: aw_watcher_vpn::Rules {
-                                        adapter_ids: vec![adapter.id.clone()],
+                                        adapter_names: vec![adapter.name.clone()],
                                         ..Default::default()
                                     },
                                 });
@@ -333,14 +313,25 @@ fn run(
                     }
                     eprintln!("Unnamed VPN {:?}, connection ID {:?}, suggested name {:?}. Use: aw-watcher-vpn name <config> <connection-id> --name <customer>", connection.name, connection.id, connection.suggested_name);
                     if notify && !dry_run {
-                        if let Err(e) = notify_unknown(&connection.name) {
-                            eprintln!("Notification failed: {e}");
+                        if autolearn {
+                            if let Err(e) = notify_unknown(config_path) {
+                                eprintln!("Notification failed: {e}");
+                            }
+                        } else {
+                            if let Err(e) = management::notify_only(&connection.name) {
+                                eprintln!("Notification failed: {e}");
+                            }
                         }
                     }
                     notified.insert(connection.id.clone());
                 }
             }
             if previous.as_ref() != Some(&context) {
+                if autolearn && !dry_run {
+                    if let Err(e) = management::save_context(config_path, &context) {
+                        eprintln!("Management context save failed: {e}");
+                    }
+                }
                 println!(
                     "{}",
                     serde_json::to_string(&json!({"observed_at":now, "data":context}))
@@ -353,6 +344,9 @@ fn run(
             }
         } else {
             previous = None;
+            if autolearn && !dry_run {
+                let _ = management::clear_context(config_path);
+            }
         }
         if !dry_run {
             aw.flush();
@@ -395,7 +389,7 @@ fn main_result() -> Result<(), String> {
                     Err(e) => return Err(e.to_string()),
                 };
                 let config = match &existing {
-                    Some(text) => serde_json::from_str(text).map_err(|e| e.to_string())?,
+                    Some(text) => parse_json(text)?,
                     None => Config { schema_version: 1, poll_seconds: 5, profiles: vec![] },
                 };
                 let merged = merge_profile(config, draft, name, replace)?;
@@ -407,15 +401,9 @@ fn main_result() -> Result<(), String> {
                 write_json(&args[3], &draft)
             }
         }
-        Some("name") if args.len() == 5 && args[3] == "--name" => {
-            let discovered = read_discovered(&format!("{}.discovered.json", args[1]))?;
-            let d = discovered.iter().find(|d| d.id == args[2]).ok_or("unknown discovery ID; run with auto-learning enabled first")?;
-            let existing = fs::read_to_string(&args[1]).map_err(|e| e.to_string())?;
-            let config = serde_json::from_str(&existing).map_err(|e| e.to_string())?;
-            let draft = Config { schema_version: 1, poll_seconds: 5, profiles: vec![aw_watcher_vpn::Profile { id: "draft".into(), customer_hint: String::new(), rules: d.rules.clone(), destinations: vec![] }] };
-            let merged = merge_profile(config, draft, &args[4], false)?;
-            save_config(&args[1], Some(&existing), &merged)
-        }
+        Some("name") if (args.len() == 5 || (args.len() == 6 && args[5] == "--replace")) && args[3] == "--name" => management::name_connection(&args[1], &args[2], &args[4], args.len() == 6),
+        Some("unnamed") if args.len() == 2 => write_json("-", &management::unnamed(&args[1])?),
+        Some("manage") if args.len() == 2 => { read_config(&args[1])?; management::launch(&args[1], false) },
         Some("run") if args.len() >= 2 => {
             for a in &args[2..] { if !["--once", "--testing", "--dry-run", "--no-autolearn", "--no-notify"].contains(&a.as_str()) { return Err(format!("unknown option: {a}")); } }
             run(&args[1], args.iter().any(|s| s == "--once"), args.iter().any(|s| s == "--testing"), args.iter().any(|s| s == "--dry-run"), !args.iter().any(|s| s == "--no-autolearn"), !args.iter().any(|s| s == "--no-notify"))
@@ -498,6 +486,14 @@ fn save_config(
     expected: Option<&str>,
     config: &impl serde::Serialize,
 ) -> Result<(), String> {
+    save_json(path, expected, config, true)
+}
+fn save_json(
+    path: &str,
+    expected: Option<&str>,
+    config: &impl serde::Serialize,
+    keep_backup: bool,
+) -> Result<(), String> {
     use std::io::Write;
     use std::path::Path;
     let target = Path::new(path);
@@ -538,8 +534,13 @@ fn save_config(
         if current.as_deref() != expected {
             return Err("config changed during learning; retry (no overwrite)".into());
         }
-        atomic_config_swap(target, &tmp, &backup, expected.is_some())?;
-        if expected.is_some() {
+        atomic_config_swap(
+            target,
+            &tmp,
+            if keep_backup { Some(&backup) } else { None },
+            expected.is_some(),
+        )?;
+        if expected.is_some() && keep_backup {
             println!("Previous config backed up to {}", backup.display());
         }
         Ok(())
@@ -554,7 +555,7 @@ fn save_config(
 fn atomic_config_swap(
     target: &std::path::Path,
     tmp: &std::path::Path,
-    backup: &std::path::Path,
+    backup: Option<&std::path::Path>,
     exists: bool,
 ) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
@@ -578,13 +579,13 @@ fn atomic_config_swap(
     };
     let t = wide(target);
     let s = wide(tmp);
-    let b = wide(backup);
+    let b = backup.map(wide);
     let success = unsafe {
         if exists {
             ReplaceFileW(
                 t.as_ptr(),
                 s.as_ptr(),
-                b.as_ptr(),
+                b.as_ref().map_or(std::ptr::null(), |b| b.as_ptr()),
                 0,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
@@ -603,11 +604,13 @@ fn atomic_config_swap(
 fn atomic_config_swap(
     target: &std::path::Path,
     tmp: &std::path::Path,
-    backup: &std::path::Path,
+    backup: Option<&std::path::Path>,
     exists: bool,
 ) -> Result<(), String> {
     if exists {
-        fs::copy(target, backup).map_err(|e| e.to_string())?;
+        if let Some(backup) = backup {
+            fs::copy(target, backup).map_err(|e| e.to_string())?;
+        }
         fs::rename(tmp, target).map_err(|e| e.to_string())
     } else {
         fs::hard_link(tmp, target).map_err(|e| e.to_string())?;
@@ -624,7 +627,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn draft() -> Config {
+    pub(super) fn draft() -> Config {
         Config {
             schema_version: 1,
             poll_seconds: 5,

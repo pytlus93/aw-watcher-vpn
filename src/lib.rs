@@ -56,10 +56,11 @@ pub struct Profile {
     #[serde(default)]
     pub destinations: Vec<String>,
 }
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Rules {
     pub adapter_ids: Vec<String>,
+    pub adapter_names: Vec<String>,
     pub description_contains: Vec<String>,
     pub dns_suffixes: Vec<String>,
     pub dns_servers: Vec<String>,
@@ -109,6 +110,7 @@ impl Config {
             }
             let r = &p.rules;
             if r.adapter_ids.is_empty()
+                && r.adapter_names.is_empty()
                 && r.description_contains.is_empty()
                 && r.dns_suffixes.is_empty()
                 && r.dns_servers.is_empty()
@@ -119,6 +121,7 @@ impl Config {
             for s in r
                 .adapter_ids
                 .iter()
+                .chain(&r.adapter_names)
                 .chain(&r.description_contains)
                 .chain(&r.dns_suffixes)
             {
@@ -160,6 +163,10 @@ fn suffix(s: &str) -> String {
 fn matches(p: &Profile, a: &Adapter, s: &Snapshot) -> bool {
     let r = &p.rules;
     usable(a)
+        && (r.adapter_names.is_empty()
+            || r.adapter_names
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(&a.name)))
         && (r.adapter_ids.is_empty()
             || r.adapter_ids
                 .iter()
@@ -270,7 +277,7 @@ pub fn evaluate(config: &Config, snapshot: Option<&Snapshot>) -> Vec<Observation
         .collect()
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Connection {
     pub id: String,
     pub name: String,
@@ -376,7 +383,19 @@ pub fn learn(before: &Snapshot, after: &Snapshot) -> Config {
             .filter(|d| old.is_none_or(|b| !b.dns_servers.contains(d)))
             .cloned()
             .collect();
-        rules.route_prefixes = new_routes;
+        // Avoid freezing every assigned-address/peer route into a fingerprint.
+        // Broad non-host prefixes are better candidates; users still review them.
+        let mut stable_routes: Vec<_> = new_routes
+            .into_iter()
+            .filter_map(|s| {
+                let net = s.parse::<IpNet>().ok()?;
+                let limit = if net.addr().is_ipv4() { 32 } else { 128 };
+                (net.prefix_len() > 0 && net.prefix_len() < limit).then_some((net.prefix_len(), s))
+            })
+            .collect();
+        stable_routes.sort();
+        stable_routes.dedup();
+        rules.route_prefixes = stable_routes.into_iter().take(3).map(|(_, s)| s).collect();
         profiles.push(Profile {
             id: format!("draft-{}", profiles.len() + 1),
             customer_hint: "REPLACE WITH CUSTOMER LABEL".into(),

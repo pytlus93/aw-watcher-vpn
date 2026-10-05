@@ -85,6 +85,39 @@ fn unlearned_virtual_ethernet_tunnel_requires_usable_address_and_route() {
     assert!(active_connections(&c, &s).is_empty());
 }
 #[test]
+fn connection_name_survives_recreated_adapter_id() {
+    let mut s = snapshot();
+    let mut c = config();
+    c.profiles[0].rules.adapter_ids.clear();
+    c.profiles[0].rules.adapter_names = vec!["tunnel".into()];
+    c.validate().unwrap();
+    s.adapters[1].id = "recreated-guid".into();
+    assert_eq!(active_connections(&c, &s)[0].customers, vec!["Synthetic A"]);
+    s.adapters[1].name = "different VPN".into();
+    s.adapters[1].network_type = "Ppp".into();
+    assert!(active_connections(&c, &s)[0].customers.is_empty());
+}
+#[test]
+fn learning_avoids_host_routes_and_large_route_fingerprints() {
+    let mut before = snapshot();
+    before.adapters[1].up = false;
+    before.routes.retain(|r| r.interface_index != 2);
+    let mut after = snapshot();
+    for n in 1..100 {
+        after.routes.push(route(2, &format!("10.0.0.{n}/32"), 10));
+    }
+    for n in 1..10 {
+        after.routes.push(route(2, &format!("10.{n}.0.0/16"), 10));
+    }
+    let learned = learn(&before, &after);
+    assert_eq!(learned.profiles[0].rules.route_prefixes.len(), 3);
+    assert!(learned.profiles[0]
+        .rules
+        .route_prefixes
+        .iter()
+        .all(|p| !p.ends_with("/32")));
+}
+#[test]
 fn dormant_installed_adapter_is_not_present() {
     let mut s = snapshot();
     s.adapters[1].up = false;
