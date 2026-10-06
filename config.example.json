@@ -3,6 +3,7 @@
   "poll_seconds": 5,
   "autolearn": true,
   "notify": true,
+  "ignored_connections": [],
   "profiles": [
     {
       "id": "customer-a",

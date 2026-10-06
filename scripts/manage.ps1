@@ -78,10 +78,16 @@ $save.AutoSize = $true
 $refresh = New-Object Windows.Forms.Button
 $refresh.Text = 'Refresh'
 $refresh.AutoSize = $true
+$ignore = New-Object Windows.Forms.Button
+$ignore.Text = 'Ignore selected'
+$ignore.AutoSize = $true
+$ignoredSettings = New-Object Windows.Forms.Button
+$ignoredSettings.Text = 'Ignored VPNs...'
+$ignoredSettings.AutoSize = $true
 $status = New-Object Windows.Forms.Label
 $status.AutoSize = $true
 $status.Padding = New-Object Windows.Forms.Padding(8)
-$buttons.Controls.AddRange(@($save, $refresh, $status))
+$buttons.Controls.AddRange(@($save, $ignore, $ignoredSettings, $refresh, $status))
 $layout.Controls.Add($buttons, 0, 5)
 
 function Refresh-Connections {
@@ -91,6 +97,7 @@ function Refresh-Connections {
         $output = & $watcherExe unnamed $configPath 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
         $data = ($output -join [Environment]::NewLine) | ConvertFrom-Json
+        $script:ignoredConnections = @($data.ignored_connections)
         $ids = @($data.connections | ForEach-Object id)
         $script:notifyEnabled = $data.notify
         if ($notificationMessage -and $data.notify -and $script:loaded -and @($ids | Where-Object { $script:previousIds -notcontains $_ }).Count -gt 0) {
@@ -127,6 +134,65 @@ $list.Add_SelectedIndexChanged({
     $name.Text = if ($connection.existing_customers.Count -eq 1) { [string]$connection.existing_customers[0] } else { [string]$connection.suggested_name }
 })
 $refresh.Add_Click({ Refresh-Connections })
+$ignore.Add_Click({
+    if ($list.SelectedItems.Count -eq 0) { $status.Text = 'Select a connection to ignore.'; return }
+    try {
+        $output = & $watcherExe ignore $configPath --name ([string]$list.SelectedItems[0].Tag.name) 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
+        Refresh-Connections
+        $status.Text = 'Ignored. Customer events and naming notifications exclude this VPN.'
+    } catch {
+        if ($managementTestOutput) { throw }
+        [void][Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Could not ignore VPN', 'OK', 'Error')
+    }
+})
+$ignoredSettings.Add_Click({
+    $dialog = New-Object Windows.Forms.Form
+    $dialog.Text = 'Ignored VPNs'
+    $dialog.Size = New-Object Drawing.Size(500, 180)
+    $dialog.StartPosition = 'CenterParent'
+    $dialog.FormBorderStyle = 'FixedDialog'
+    $dialog.MaximizeBox = $false
+    $hint = New-Object Windows.Forms.Label
+    $hint.Text = 'Enter the exact connection name (e.g. Polcom), or select one to restore.'
+    $hint.Location = New-Object Drawing.Point(12, 12)
+    $hint.Size = New-Object Drawing.Size(465, 35)
+    $connectionName = New-Object Windows.Forms.ComboBox
+    $connectionName.Location = New-Object Drawing.Point(12, 48)
+    $connectionName.Size = New-Object Drawing.Size(460, 26)
+    $connectionName.DropDownStyle = 'DropDown'
+    foreach ($entry in $script:ignoredConnections) { [void]$connectionName.Items.Add([string]$entry) }
+    $addIgnore = New-Object Windows.Forms.Button
+    $addIgnore.Text = 'Ignore'
+    $addIgnore.Location = New-Object Drawing.Point(12, 85)
+    $restore = New-Object Windows.Forms.Button
+    $restore.Text = 'Restore'
+    $restore.Location = New-Object Drawing.Point(100, 85)
+    $changeIgnore = {
+        param($ignored)
+        if (-not $connectionName.Text.Trim()) { return }
+        $command = if ($ignored) { 'ignore' } else { 'unignore' }
+        $output = & $watcherExe $command $configPath --name $connectionName.Text.Trim() 2>&1
+        if ($LASTEXITCODE -ne 0) { [void][Windows.Forms.MessageBox]::Show(($output -join [Environment]::NewLine), 'Could not update ignored VPNs'); return }
+        Refresh-Connections
+        $connectionName.Items.Clear()
+        foreach ($entry in $script:ignoredConnections) { [void]$connectionName.Items.Add([string]$entry) }
+    }
+    $addIgnore.Add_Click({ & $changeIgnore $true })
+    $restore.Add_Click({ & $changeIgnore $false })
+    $dialog.Controls.AddRange(@($hint, $connectionName, $addIgnore, $restore))
+    if ($managementTestOutput) {
+        $dialog.Show($form)
+        [Windows.Forms.Application]::DoEvents()
+        $connectionName.Text = 'Synthetic VPN B'
+        $addIgnore.PerformClick()
+        if ($script:ignoredConnections -notcontains 'Synthetic VPN B') { throw 'Ignored VPN settings did not save' }
+        $restore.PerformClick()
+        if ($script:ignoredConnections -contains 'Synthetic VPN B') { throw 'Ignored VPN settings did not restore' }
+        $dialog.Close()
+    } else { [void]$dialog.ShowDialog($form) }
+    $dialog.Dispose()
+})
 $save.Add_Click({
     if ($list.SelectedItems.Count -eq 0 -or -not $name.Text.Trim()) { $status.Text = 'Select a connection and enter a name.'; return }
     $arguments = @('name', $configPath, [string]$list.SelectedItems[0].Tag.id, '--name', $name.Text.Trim())
@@ -186,7 +252,16 @@ try {
         $name.Text = 'Synthetic Customer A'
         $save.PerformClick()
         if ($list.Items.Count -ne 1) { throw "Naming did not remove the resolved connection; $($status.Text)" }
-        'UI list and naming checks passed'
+        $list.Items[0].Selected = $true
+        [Windows.Forms.Application]::DoEvents()
+        $ignore.PerformClick()
+        if ($list.Items.Count -ne 0) { throw 'Ignoring did not remove the pending connection' }
+        & $watcherExe unignore $configPath --name 'Synthetic VPN B' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Restoring ignored VPN failed' }
+        Refresh-Connections
+        if ($list.Items.Count -ne 1) { throw 'Restoring did not return the unnamed connection' }
+        $ignoredSettings.PerformClick()
+        'UI listing, naming, ignore and restore checks passed'
     } else { [Windows.Forms.Application]::Run($form) }
 }
 finally { $timer.Dispose(); $tray.Dispose(); $form.Dispose(); $mutex.ReleaseMutex(); $mutex.Dispose() }

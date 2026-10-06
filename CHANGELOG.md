@@ -1,5 +1,15 @@
 # Releases
 
+## 0.2.1 — 2026-10-06
+
+- Ignore selected connection names, even when they have a learned customer profile.
+- Exclude ignored VPNs from AW events, discovery and naming notifications.
+- Add Ignore selected and Ignored VPNs / Restore controls to the naming window.
+- Keep other simultaneous customer connections; ignored-only samples send nothing.
+- Keep fingerprints intact so restoring a VPN does not require relearning it.
+
+Validated with 26 Rust tests and synthetic module/Windows naming UI checks.
+
 ## 0.2.0 — 2026-10-06
 
 - Run through ActivityWatch's Modules menu: no-argument startup and `--testing`.

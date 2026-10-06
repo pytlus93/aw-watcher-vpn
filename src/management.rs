@@ -270,6 +270,15 @@ mod tests {
         save_config(&format!("{path}.discovered.json"), None, &discoveries).unwrap();
         let pending = unnamed(path).unwrap();
         assert_eq!(pending.connections.len(), 2);
+        set_ignored(path, "VPN B", true).unwrap();
+        set_ignored(path, " vpn b ", true).unwrap();
+        assert_eq!(
+            read_config(path).unwrap().ignored_connections,
+            vec!["VPN B"]
+        );
+        assert_eq!(unnamed(path).unwrap().connections.len(), 1);
+        set_ignored(path, "VPN B", false).unwrap();
+        assert_eq!(unnamed(path).unwrap().connections.len(), 2);
         assert_eq!(
             pending.connections[0].existing_customers,
             vec!["Existing Customer"]
