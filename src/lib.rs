@@ -46,6 +46,8 @@ pub struct Config {
     #[serde(default = "enabled")]
     pub notify: bool,
     #[serde(default)]
+    pub ignored_connections: Vec<String>,
+    #[serde(default)]
     pub profiles: Vec<Profile>,
 }
 fn default_interval() -> u64 {
@@ -100,6 +102,13 @@ impl Config {
         }
         if !(2..=60).contains(&self.poll_seconds) {
             return Err("poll_seconds must be 2..60".into());
+        }
+        if self
+            .ignored_connections
+            .iter()
+            .any(|name| name.trim().is_empty())
+        {
+            return Err("ignored connection names cannot be empty".into());
         }
         let mut ids = HashSet::new();
         for p in &self.profiles {
@@ -299,6 +308,9 @@ pub struct Connection {
 pub fn active_connections(config: &Config, snapshot: &Snapshot) -> Vec<Connection> {
     let mut connections = Vec::new();
     for a in snapshot.adapters.iter().filter(|a| usable(a)) {
+        if connection_ignored(config, &a.name) {
+            continue;
+        }
         let mut customers: Vec<String> = config
             .profiles
             .iter()
@@ -346,6 +358,12 @@ pub fn active_connections(config: &Config, snapshot: &Snapshot) -> Vec<Connectio
     }
     connections.sort_by(|a, b| a.id.cmp(&b.id));
     connections
+}
+pub fn connection_ignored(config: &Config, name: &str) -> bool {
+    config
+        .ignored_connections
+        .iter()
+        .any(|ignored| ignored.trim().eq_ignore_ascii_case(name.trim()))
 }
 
 /// Produces conservative drafts for changed usable adapters, never auto-activates.
@@ -415,6 +433,7 @@ pub fn learn(before: &Snapshot, after: &Snapshot) -> Config {
         poll_seconds: 5,
         autolearn: true,
         notify: true,
+        ignored_connections: vec![],
         profiles,
     }
 }

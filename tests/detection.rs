@@ -39,6 +39,7 @@ fn config() -> Config {
         poll_seconds: 5,
         autolearn: true,
         notify: true,
+        ignored_connections: vec![],
         profiles: vec![Profile {
             id: "customer-a".into(),
             customer_hint: "Synthetic A".into(),
@@ -98,6 +99,25 @@ fn connection_name_survives_recreated_adapter_id() {
     s.adapters[1].name = "different VPN".into();
     s.adapters[1].network_type = "Ppp".into();
     assert!(active_connections(&c, &s)[0].customers.is_empty());
+}
+#[test]
+fn ignored_company_tunnel_does_not_hide_customer_connections() {
+    let mut s = snapshot();
+    let mut company = adapter("company", 3, "198.51.100.8");
+    company.name = "Polcom".into();
+    company.network_type = "Ppp".into();
+    s.adapters.push(company);
+    s.routes.push(route(3, "10.0.0.0/8", 10));
+    let mut c = config();
+    c.ignored_connections = vec![" polcom ".into()];
+    c.validate().unwrap();
+    let connections = active_connections(&c, &s);
+    assert_eq!(connections.len(), 1);
+    assert_eq!(connections[0].customers, vec!["Synthetic A"]);
+    s.adapters[1].up = false;
+    assert!(active_connections(&c, &s).is_empty());
+    c.ignored_connections = vec![" ".into()];
+    assert!(c.validate().is_err());
 }
 #[test]
 fn learning_avoids_host_routes_and_large_route_fingerprints() {

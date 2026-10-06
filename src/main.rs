@@ -401,7 +401,7 @@ fn main_result() -> Result<(), String> {
                 };
                 let config = match &existing {
                     Some(text) => parse_json(text)?,
-                    None => Config { schema_version: 1, poll_seconds: 5, autolearn: true, notify: true, profiles: vec![] },
+                    None => Config { schema_version: 1, poll_seconds: 5, autolearn: true, notify: true, ignored_connections: vec![], profiles: vec![] },
                 };
                 let merged = merge_profile(config, draft, name, replace)?;
                 save_config(&args[3], existing.as_deref(), &merged)?;
@@ -414,6 +414,7 @@ fn main_result() -> Result<(), String> {
         }
         Some("name") if (args.len() == 5 || (args.len() == 6 && args[5] == "--replace")) && args[3] == "--name" => management::name_connection(&args[1], &args[2], &args[4], args.len() == 6),
         Some("unnamed") if args.len() == 2 => write_json("-", &management::unnamed(&args[1])?),
+        Some("ignore") | Some("unignore") if args.len() == 4 && args[2] == "--name" => management::set_ignored(&args[1], &args[3], args[0] == "ignore"),
         Some("manage") if args.len() == 2 => { read_config(&args[1])?; management::launch(&args[1], false) },
         Some("manage") if args.len() == 1 => { let path = host::default_config(false)?; host::init_config(&path)?; management::launch(path.to_str().ok_or("invalid config path")?, false) },
         Some("run") if args.len() >= 2 => {
@@ -645,6 +646,7 @@ mod tests {
             poll_seconds: 5,
             autolearn: true,
             notify: true,
+            ignored_connections: vec![],
             profiles: vec![aw_watcher_vpn::Profile {
                 id: "draft-1".into(),
                 customer_hint: "draft".into(),

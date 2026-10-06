@@ -15,6 +15,7 @@ pub struct Unnamed {
     connections: Vec<UnnamedConnection>,
     customers: Vec<String>,
     notify: bool,
+    ignored_connections: Vec<String>,
 }
 fn naming_rules(d: &Discovered) -> aw_watcher_vpn::Rules {
     let mut rules = d.rules.clone();
@@ -42,6 +43,9 @@ pub fn unnamed(path: &str) -> Result<Unnamed, String> {
     };
     let mut connections = vec![];
     for d in discovered {
+        if aw_watcher_vpn::connection_ignored(&config, &d.name) {
+            continue;
+        }
         let active = context
             .as_ref()
             .and_then(|c| c.connections.iter().find(|c| c.id == d.id));
@@ -98,6 +102,7 @@ pub fn unnamed(path: &str) -> Result<Unnamed, String> {
         connections,
         customers,
         notify: config.notify,
+        ignored_connections: config.ignored_connections,
     })
 }
 
@@ -114,6 +119,7 @@ pub fn name_connection(path: &str, id: &str, name: &str, replace: bool) -> Resul
         poll_seconds: 5,
         autolearn: true,
         notify: true,
+        ignored_connections: vec![],
         profiles: vec![aw_watcher_vpn::Profile {
             id: "draft".into(),
             customer_hint: String::new(),
@@ -127,6 +133,30 @@ pub fn name_connection(path: &str, id: &str, name: &str, replace: bool) -> Resul
 
 pub fn save_context(path: &str, context: &Context) -> Result<(), String> {
     save_context_value(path, Some(context))
+}
+pub fn set_ignored(path: &str, name: &str, ignored: bool) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("connection name cannot be empty".into());
+    }
+    let existing = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let mut config: Config = parse_json(&existing)?;
+    config.validate()?;
+    let before = config.ignored_connections.clone();
+    if ignored {
+        if !aw_watcher_vpn::connection_ignored(&config, name) {
+            config.ignored_connections.push(name.into());
+        }
+    } else {
+        config
+            .ignored_connections
+            .retain(|n| !n.trim().eq_ignore_ascii_case(name));
+    }
+    if before == config.ignored_connections {
+        return Ok(());
+    }
+    config.validate()?;
+    save_config(path, Some(&existing), &config)
 }
 pub fn clear_context(path: &str) -> Result<(), String> {
     save_context_value(path, None)

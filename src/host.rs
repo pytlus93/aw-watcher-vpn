@@ -50,6 +50,7 @@ pub fn init_config(path: &Path) -> Result<(), String> {
         poll_seconds: 5,
         autolearn: true,
         notify: true,
+        ignored_connections: vec![],
         profiles: vec![],
     };
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
