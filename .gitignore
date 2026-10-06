@@ -4,4 +4,9 @@
 /local/
 *.log
 /config.json
+/config.json.*.bak
+/config.json.discovered.json*
+/config.json.context.json
+/config.json.lock
+/.config.json.*.tmp
 
