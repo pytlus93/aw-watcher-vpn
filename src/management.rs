@@ -14,6 +14,7 @@ pub struct UnnamedConnection {
 pub struct Unnamed {
     connections: Vec<UnnamedConnection>,
     customers: Vec<String>,
+    notify: bool,
 }
 fn naming_rules(d: &Discovered) -> aw_watcher_vpn::Rules {
     let mut rules = d.rules.clone();
@@ -96,6 +97,7 @@ pub fn unnamed(path: &str) -> Result<Unnamed, String> {
     Ok(Unnamed {
         connections,
         customers,
+        notify: config.notify,
     })
 }
 
@@ -110,6 +112,8 @@ pub fn name_connection(path: &str, id: &str, name: &str, replace: bool) -> Resul
     let draft = Config {
         schema_version: 1,
         poll_seconds: 5,
+        autolearn: true,
+        notify: true,
         profiles: vec![aw_watcher_vpn::Profile {
             id: "draft".into(),
             customer_hint: String::new(),
@@ -172,10 +176,11 @@ pub fn launch(path: &str, notification: bool) -> Result<(), String> {
         )
     };
     let bootstrap = format!(
-        "$configPath = {}; $watcherExe = {}; $notificationMessage = {};\n",
+        "$configPath = {}; $watcherExe = {}; $notificationMessage = {}; $watcherPid = {};\n",
         decode(&config_path.to_string_lossy()),
         decode(&exe.to_string_lossy()),
-        if notification { "$true" } else { "$false" }
+        if notification { "$true" } else { "$false" },
+        if notification { std::process::id() } else { 0 }
     );
     spawn_script(&(bootstrap + include_str!("../scripts/manage.ps1")))
 }

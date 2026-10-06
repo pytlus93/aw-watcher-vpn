@@ -1,14 +1,14 @@
 # aw-watcher-vpn
 
-Windows network-context watcher for ActivityWatch. One shared collector observes
+Windows network-context module managed by ActivityWatch. One shared collector observes
 adapters, assigned addresses, DNS configuration and routes across VPN vendors.
 Customer rules produce assignment hints; they do not assign cases or bill time.
 
-This first release uses a Rust core and a built-in Windows PowerShell/.NET
+Release 0.2.0 uses a Rust core and a built-in Windows PowerShell/.NET
 collector. It requires Windows 10/11 with Windows PowerShell 5.1 and the NetTCPIP
 module. It requests no elevation, installs no driver, modifies no networking,
 and sends no probes or DNS queries. Enterprise policy can restrict collection;
-in that case it reports unknown. Runtime HTTP is exclusively 127.0.0.1:5600
+in that case collection leaves a gap. Runtime HTTP is exclusively 127.0.0.1:5600
 (5666 with `--testing`), with no redirects. No cloud services are used.
 
 ## Build
@@ -20,9 +20,70 @@ cargo test
 cargo build --release
 ```
 
-`scripts/build.ps1 -Test -Package` also creates a ZIP in `dist`. No automatic
-startup or VPN-client changes are made. Start it manually or configure AW's
-launcher after validating your profiles.
+`scripts/build.ps1 -Test -Package` creates
+`dist/aw-watcher-vpn-0.2.0-windows-x64.zip` and its `.sha256` checksum.
+The ZIP contains an `aw-watcher-vpn` folder with the executable, installer,
+naming shortcut, synthetic config example, README and license.
+
+## Install as an ActivityWatch module
+
+Exit ActivityWatch, extract the ZIP, and open its `aw-watcher-vpn` folder:
+
+```powershell
+.\install.ps1 -ActivityWatchDirectory 'C:\path\to\activitywatch'
+```
+
+The directory must contain `aw-qt.exe`. Installation places the executable in
+`activitywatch\aw-watcher-vpn\`, which AW discovers through its existing
+module launcher. It adds `aw-watcher-vpn` to `[aw-qt].autostart_modules`, retaining
+other modules and backing up a changed tray config. Restart ActivityWatch;
+**Modules -> aw-watcher-vpn** controls start/stop. No separate Windows service
+or scheduled task is installed. Use `-NoAutostart` to leave startup settings alone.
+
+To keep your previously learned profiles on first installation:
+
+```powershell
+.\install.ps1 -ActivityWatchDirectory 'C:\path\to\activitywatch' -ProfileConfig 'C:\path\to\old\config.json'
+```
+
+Import keeps profile IDs, labels, rules and polling settings, and copies the
+discovery sidecar if present. It refuses to overwrite an existing AW module
+configuration. Reinstallation without `-ProfileConfig` preserves your settings.
+Stop any old development-harness instance before starting the AW-managed module.
+
+The default configuration is under AW's Windows config root:
+
+```text
+%LOCALAPPDATA%\activitywatch\activitywatch\aw-watcher-vpn\config.json
+```
+
+`AW_PROFILE` selects a separate `activitywatch-<profile>` root. AW's `--testing`
+launch uses `config-testing.json` and port 5666. With no arguments, the executable
+initializes an empty profile list if needed, then stays running. Unlearned tunnel
+discovery works immediately. Invalid initial settings are retried every ten
+seconds. A config-specific lock prevents two watcher instances using one config.
+
+Set `autolearn` or `notify` to `false` in this JSON to disable either feature;
+defaults are `true`, including for imported old configs. The module reloads
+settings each poll. Logs are in AW's `Logs\aw-watcher-vpn\` directory, rotated
+after 1 MiB. An explicit `--config` puts logs beside that config.
+
+Click a discovery notification to name connections, or open the installed
+`name-connections.cmd`. Automatically launched naming helpers close when their
+watcher exits. Manually opened management windows remain available independently.
+The helper is part of the module; it is not a new module in AW's Modules menu.
+
+Useful maintenance commands:
+
+```powershell
+.\aw-watcher-vpn.exe --config-path
+.\aw-watcher-vpn.exe --init-config
+.\aw-watcher-vpn.exe --config 'C:\private\config.json' --validate-config
+.\aw-watcher-vpn.exe --dry-run --once
+.\aw-watcher-vpn.exe manage
+```
+
+The explicit `run`, capture and learning commands below remain development tools.
 
 ## Capture and learn
 
@@ -153,7 +214,8 @@ For a future Windows service, run `manage` in your desktop session using the
 service's absolute config path and file permissions that allow the UI to update
 it. Notification UI belongs to an interactive desktop session; launching a
 notification process from service session 0 does not display it on your desktop.
-Service installation and AW tray module registration are not included here.
+Service installation is not included; AW tray module installation is supplied
+by `install.ps1` as described above.
 The local `<config>.context.json` file supplies the helper's last observed state;
 it is replaced on context changes and cleared on collection failure.
 
@@ -205,19 +267,26 @@ events in the planned review UI or inspect them through AW's bucket API.
 
 ## Limits and validation
 
-Validated on 2026-10-05 using Rust 1.99.0 and the installed MSVC toolchain:
-23 automated tests pass, including suppression of empty heartbeats,
+Validated on 2026-10-06 using Rust 1.99.0 and the installed MSVC toolchain:
+25 automated tests pass, including module config initialization/profile isolation,
+duplicate-instance locking, suppression of empty heartbeats,
 mixed known/unknown connections, exclusions,
 named merging, replacement and Windows atomic
 backup handling. Clippy passes with warnings denied, and the release
 binary's embedded Windows PowerShell collector and synthetic-profile dry run
-pass. The ZIP is `dist/aw-watcher-vpn-0.1.0-windows-x64.zip`. Automated AW delivery
+pass. The ZIP is `dist/aw-watcher-vpn-0.2.0-windows-x64.zip`. Automated AW delivery
 tests use a real loopback mock HTTP server. No real VPN connect/disconnect cycle
 or actual ActivityWatch server session has been validated yet.
 The synthetic Windows Forms test `tests/management-ui.ps1` validates listing two
 unnamed connections, saving a label, and removing the resolved row. Its rendered
 form was visually inspected. Desktop notification clicks and a real Windows
 service session have not been validated.
+`tests/module-smoke.ps1` checks installation against a synthetic AW directory,
+preserving other startup modules and existing settings, repeat installation,
+profile import protection, default/testing/profile paths, duplicate instances,
+and no-argument/`--testing` launcher lifetime. It forces collection failure so
+these host tests never write to the user's real AW server. A complete installed
+AW tray start/stop session has not yet been exercised.
 
 An installed/up tunnel with stale routes is not proof of authentication or
 reachability. Profiles with identical adapter/routes/DNS cannot be distinguished

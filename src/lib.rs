@@ -41,11 +41,18 @@ pub struct Config {
     pub schema_version: u32,
     #[serde(default = "default_interval")]
     pub poll_seconds: u64,
+    #[serde(default = "enabled")]
+    pub autolearn: bool,
+    #[serde(default = "enabled")]
+    pub notify: bool,
     #[serde(default)]
     pub profiles: Vec<Profile>,
 }
 fn default_interval() -> u64 {
     5
+}
+fn enabled() -> bool {
+    true
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -406,6 +413,8 @@ pub fn learn(before: &Snapshot, after: &Snapshot) -> Config {
     Config {
         schema_version: 1,
         poll_seconds: 5,
+        autolearn: true,
+        notify: true,
         profiles,
     }
 }

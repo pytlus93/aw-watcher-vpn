@@ -37,6 +37,8 @@ fn config() -> Config {
     Config {
         schema_version: 1,
         poll_seconds: 5,
+        autolearn: true,
+        notify: true,
         profiles: vec![Profile {
             id: "customer-a".into(),
             customer_hint: "Synthetic A".into(),

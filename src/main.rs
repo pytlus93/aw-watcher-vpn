@@ -10,7 +10,9 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+mod host;
 mod management;
+macro_rules! diag { ($($arg:tt)*) => { host::record(&format!($($arg)*)) }; }
 fn parse_json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, String> {
     serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())
 }
@@ -142,7 +144,7 @@ impl Adapter {
         }
         if self.queue.len() >= 512 {
             self.queue.pop_front();
-            eprintln!("AW queue full: oldest sample dropped");
+            diag!("AW queue full: oldest sample dropped");
         }
         let bucket = format!("aw-watcher-vpn_{}", self.host);
         self.queue.push_back(Pending {
@@ -183,7 +185,7 @@ impl Adapter {
                 continue;
             }
             if self.send(&p).is_err() {
-                eprintln!("ActivityWatch unavailable; samples retained locally in memory");
+                diag!("ActivityWatch unavailable; samples retained locally in memory");
                 return;
             }
             self.queue.pop_front();
@@ -238,6 +240,7 @@ fn run(
     notify: bool,
 ) -> Result<(), String> {
     let mut config = read_config(config_path)?;
+    let _instance = host::instance_lock(config_path)?;
     let discovery_path = format!("{config_path}.discovered.json");
     let mut notified = HashSet::new();
     let host: String = std::env::var("COMPUTERNAME")
@@ -257,13 +260,15 @@ fn run(
         let start = Instant::now();
         match read_config(config_path) {
             Ok(updated) => config = updated,
-            Err(e) => eprintln!("Config reload failed: {e}; retaining previous rules"),
+            Err(e) => diag!("Config reload failed: {e}; retaining previous rules"),
         }
         aw.pulse = config.poll_seconds + 1;
+        let autolearn = autolearn && config.autolearn;
+        let notify = notify && config.notify;
         let snapshot = match capture() {
             Ok(s) => Some(s),
             Err(e) => {
-                eprintln!("{e}; leaving a gap in the context timeline");
+                diag!("{e}; leaving a gap in the context timeline");
                 None
             }
         };
@@ -310,19 +315,19 @@ fn run(
                             Ok::<(), String>(())
                         })();
                         if let Err(e) = result {
-                            eprintln!("Discovery save failed: {e}");
+                            diag!("Discovery save failed: {e}");
                             continue;
                         }
                     }
-                    eprintln!("Unnamed VPN {:?}, connection ID {:?}, suggested name {:?}. Use: aw-watcher-vpn name <config> <connection-id> --name <customer>", connection.name, connection.id, connection.suggested_name);
+                    diag!("Unnamed VPN {:?}, connection ID {:?}, suggested name {:?}. Use: aw-watcher-vpn name <config> <connection-id> --name <customer>", connection.name, connection.id, connection.suggested_name);
                     if notify && !dry_run {
                         if autolearn {
                             if let Err(e) = notify_unknown(config_path) {
-                                eprintln!("Notification failed: {e}");
+                                diag!("Notification failed: {e}");
                             }
                         } else {
                             if let Err(e) = management::notify_only(&connection.name) {
-                                eprintln!("Notification failed: {e}");
+                                diag!("Notification failed: {e}");
                             }
                         }
                     }
@@ -332,7 +337,7 @@ fn run(
             if previous.as_ref() != Some(&context) {
                 if autolearn && !dry_run {
                     if let Err(e) = management::save_context(config_path, &context) {
-                        eprintln!("Management context save failed: {e}");
+                        diag!("Management context save failed: {e}");
                     }
                 }
                 println!(
@@ -368,6 +373,9 @@ fn run(
 }
 fn main_result() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.is_empty() || args[0].starts_with("--") {
+        return host::launch(&args);
+    }
     match args.first().map(String::as_str) {
         Some("snapshot") if args.len() == 2 => write_json(&args[1], &capture()?),
         Some("evaluate") if args.len() == 3 => write_json("-", &Context::new(active_connections(&read_config(&args[1])?, &read_snapshot(&args[2])?))),
@@ -393,7 +401,7 @@ fn main_result() -> Result<(), String> {
                 };
                 let config = match &existing {
                     Some(text) => parse_json(text)?,
-                    None => Config { schema_version: 1, poll_seconds: 5, profiles: vec![] },
+                    None => Config { schema_version: 1, poll_seconds: 5, autolearn: true, notify: true, profiles: vec![] },
                 };
                 let merged = merge_profile(config, draft, name, replace)?;
                 save_config(&args[3], existing.as_deref(), &merged)?;
@@ -407,6 +415,7 @@ fn main_result() -> Result<(), String> {
         Some("name") if (args.len() == 5 || (args.len() == 6 && args[5] == "--replace")) && args[3] == "--name" => management::name_connection(&args[1], &args[2], &args[4], args.len() == 6),
         Some("unnamed") if args.len() == 2 => write_json("-", &management::unnamed(&args[1])?),
         Some("manage") if args.len() == 2 => { read_config(&args[1])?; management::launch(&args[1], false) },
+        Some("manage") if args.len() == 1 => { let path = host::default_config(false)?; host::init_config(&path)?; management::launch(path.to_str().ok_or("invalid config path")?, false) },
         Some("run") if args.len() >= 2 => {
             for a in &args[2..] { if !["--once", "--testing", "--dry-run", "--no-autolearn", "--no-notify"].contains(&a.as_str()) { return Err(format!("unknown option: {a}")); } }
             run(&args[1], args.iter().any(|s| s == "--once"), args.iter().any(|s| s == "--testing"), args.iter().any(|s| s == "--dry-run"), !args.iter().any(|s| s == "--no-autolearn"), !args.iter().any(|s| s == "--no-notify"))
@@ -622,7 +631,7 @@ fn atomic_config_swap(
 }
 fn main() {
     if let Err(e) = main_result() {
-        eprintln!("{e}");
+        diag!("{e}");
         std::process::exit(1);
     }
 }
@@ -634,6 +643,8 @@ mod tests {
         Config {
             schema_version: 1,
             poll_seconds: 5,
+            autolearn: true,
+            notify: true,
             profiles: vec![aw_watcher_vpn::Profile {
                 id: "draft-1".into(),
                 customer_hint: "draft".into(),

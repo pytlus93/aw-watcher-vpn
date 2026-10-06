@@ -92,7 +92,8 @@ function Refresh-Connections {
         if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
         $data = ($output -join [Environment]::NewLine) | ConvertFrom-Json
         $ids = @($data.connections | ForEach-Object id)
-        if ($notificationMessage -and $script:loaded -and @($ids | Where-Object { $script:previousIds -notcontains $_ }).Count -gt 0) {
+        $script:notifyEnabled = $data.notify
+        if ($notificationMessage -and $data.notify -and $script:loaded -and @($ids | Where-Object { $script:previousIds -notcontains $_ }).Count -gt 0) {
             $tray.ShowBalloonTip(10000, 'ActivityWatch VPN', 'New unnamed VPN connections detected. Click to name them.', [Windows.Forms.ToolTipIcon]::Info)
         }
         $script:previousIds = $ids
@@ -146,7 +147,10 @@ $save.Add_Click({
 })
 $timer = New-Object Windows.Forms.Timer
 $timer.Interval = 5000
-$timer.Add_Tick({ Refresh-Connections })
+$timer.Add_Tick({
+    if ($watcherPid -and -not (Get-Process -Id $watcherPid -ErrorAction SilentlyContinue)) { $form.Close(); return }
+    Refresh-Connections
+})
 $timer.Start()
 $tray = New-Object Windows.Forms.NotifyIcon
 $tray.Icon = [Drawing.SystemIcons]::Information
@@ -162,7 +166,7 @@ $form.Add_Shown({
     Refresh-Connections
     if ($notificationMessage) {
         $form.Hide()
-        $tray.ShowBalloonTip(10000, 'ActivityWatch VPN', 'Unnamed VPN connections detected. Click to name them.', [Windows.Forms.ToolTipIcon]::Info)
+        if ($script:notifyEnabled) { $tray.ShowBalloonTip(10000, 'ActivityWatch VPN', 'Unnamed VPN connections detected. Click to name them.', [Windows.Forms.ToolTipIcon]::Info) }
     }
 })
 try {

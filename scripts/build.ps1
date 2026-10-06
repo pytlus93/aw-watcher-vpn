@@ -17,6 +17,14 @@ try {
     if ($Package) {
         New-Item -ItemType Directory -Path dist -Force | Out-Null
         $binary = Join-Path $TargetDirectory 'release\aw-watcher-vpn.exe'
-        Compress-Archive -LiteralPath $binary,README.md,config.example.json,LICENSE -DestinationPath dist\aw-watcher-vpn-0.1.0-windows-x64.zip -Force
+        $manifest = [IO.File]::ReadAllText((Join-Path $root 'Cargo.toml'))
+        $version = [regex]::Match($manifest, '(?m)^version\s*=\s*"([0-9.]+)"').Groups[1].Value
+        if (-not $version) { throw 'Cannot determine package version' }
+        $stage = Join-Path $root ("dist\package-$version-" + [Guid]::NewGuid().ToString('N') + '\aw-watcher-vpn')
+        New-Item -ItemType Directory -Path $stage -Force | Out-Null
+        Copy-Item -LiteralPath $binary,README.md,CHANGELOG.md,config.example.json,LICENSE,scripts\install.ps1,scripts\name-connections.cmd -Destination $stage -Force
+        Compress-Archive -LiteralPath $stage -DestinationPath "dist\aw-watcher-vpn-$version-windows-x64.zip" -Force
+        $zip = Join-Path $root "dist\aw-watcher-vpn-$version-windows-x64.zip"
+        [IO.File]::WriteAllText(($zip + '.sha256'), ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($zip) + "`n"), [Text.UTF8Encoding]::new($false))
     }
 } finally { Pop-Location }
