@@ -133,7 +133,11 @@ impl Context {
         names.dedup_by(|a, b| a.to_lowercase() == b.to_lowercase());
         Self {
             schema_version: 3,
-            title: names.join("|"),
+            title: if names.is_empty() && !connections.is_empty() {
+                "Activity (context unavailable)".into()
+            } else {
+                names.join("|")
+            },
             connections,
         }
     }
@@ -176,13 +180,38 @@ impl Adapter {
             data,
         });
     }
-    fn send(&mut self, p: &Pending) -> Result<(), Box<ureq::Error>> {
+    fn send(&mut self, p: &Pending) -> Result<(), String> {
         if !self.created.contains(&p.bucket) {
-            self.agent
+            let response = self
+                .agent
                 .post(&format!("{}/buckets/{}", self.base, p.bucket))
                 .send_json(
                     json!({"client":"aw-watcher-vpn", "type":"vpn.context", "hostname":self.host}),
-                )?;
+                )
+                .map_err(|e| e.to_string())?;
+            if response.status() == 304 {
+                let metadata = self
+                    .agent
+                    .get(&format!("{}/buckets/{}", self.base, p.bucket))
+                    .call()
+                    .map_err(|e| e.to_string())?;
+                if !(200..300).contains(&metadata.status()) {
+                    return Err(format!(
+                        "Unexpected bucket metadata status {}",
+                        metadata.status()
+                    ));
+                }
+                let metadata: serde_json::Value =
+                    metadata.into_json().map_err(|e| e.to_string())?;
+                if metadata["type"] != "vpn.context" {
+                    return Err("Existing bucket has incompatible type; no heartbeat sent".into());
+                }
+            } else if !(200..300).contains(&response.status()) {
+                return Err(format!(
+                    "Unexpected bucket creation status {}",
+                    response.status()
+                ));
+            }
             self.created.insert(p.bucket.clone());
         }
         let result = self
@@ -195,7 +224,11 @@ impl Adapter {
         if matches!(result, Err(ureq::Error::Status(404, _))) {
             self.created.remove(&p.bucket);
         }
-        result.map(|_| ()).map_err(Box::new)
+        let response = result.map_err(|e| e.to_string())?;
+        if !(200..300).contains(&response.status()) {
+            return Err(format!("Unexpected heartbeat status {}", response.status()));
+        }
+        Ok(())
     }
     fn flush(&mut self) {
         // Bounded work and age. FIFO prevents old states overwriting newer states.
@@ -207,8 +240,8 @@ impl Adapter {
                 self.queue.pop_front();
                 continue;
             }
-            if self.send(&p).is_err() {
-                diag!("ActivityWatch unavailable; samples retained locally in memory");
+            if let Err(error) = self.send(&p) {
+                diag!("ActivityWatch delivery failed: {error}; samples retained locally in memory");
                 return;
             }
             self.queue.pop_front();
@@ -875,5 +908,220 @@ mod tests {
         assert!(Context::new(vec![]).title.is_empty());
         let old: Context = parse_json(r#"{"schema_version":3,"connections":[]}"#).unwrap();
         assert!(old.title.is_empty());
+    }
+    // Each scripted server has a bounded accept deadline so regressions fail instead of hanging.
+    fn protocol_server(
+        listener: TcpListener,
+        replies: Vec<(u16, serde_json::Value)>,
+    ) -> thread::JoinHandle<Vec<(String, serde_json::Value)>> {
+        thread::spawn(move || {
+            listener.set_nonblocking(true).unwrap();
+            let mut requests = vec![];
+            for (status, body) in replies {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                let mut socket = loop {
+                    match listener.accept() {
+                        Ok((socket, _)) => break socket,
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            assert!(
+                                Instant::now() < deadline,
+                                "Expected HTTP request did not arrive"
+                            );
+                            thread::sleep(Duration::from_millis(5));
+                        }
+                        Err(e) => panic!("{e}"),
+                    }
+                };
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut reader = BufReader::new(socket.try_clone().unwrap());
+                let mut first = String::new();
+                reader.read_line(&mut first).unwrap();
+                let mut len = 0;
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" {
+                        break;
+                    }
+                    if line.to_lowercase().starts_with("content-length:") {
+                        len = line.split(':').nth(1).unwrap().trim().parse().unwrap();
+                    }
+                }
+                let mut bytes = vec![0; len];
+                reader.read_exact(&mut bytes).unwrap();
+                requests.push((
+                    first,
+                    if bytes.is_empty() {
+                        serde_json::Value::Null
+                    } else {
+                        serde_json::from_slice(&bytes).unwrap()
+                    },
+                ));
+                let body = if status == 304 {
+                    String::new()
+                } else {
+                    body.to_string()
+                };
+                write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            }
+            requests
+        })
+    }
+    fn metadata() -> serde_json::Value {
+        json!({"type":"vpn.context"})
+    }
+    #[test]
+    fn existing_bucket_304_and_producer_restart_deliver_heartbeats() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = protocol_server(
+            listener,
+            vec![
+                (304, json!({})),
+                (200, metadata()),
+                (200, json!({})),
+                (304, json!({})),
+                (200, metadata()),
+                (200, json!({})),
+            ],
+        );
+        for _ in 0..2 {
+            let mut aw = Adapter::new(port, "synthetic".into(), 5);
+            aw.enqueue(Utc::now(), Context::new(vec![connection()]));
+            aw.flush();
+            assert!(aw.queue.is_empty());
+        }
+        let requests = server.join().unwrap();
+        assert!(requests[1].0.starts_with("GET "));
+        for i in [2, 5] {
+            assert!(requests[i].0.contains("/heartbeat?pulsetime=6"));
+            assert_eq!(requests[i].1["data"]["title"], "Synthetic A");
+        }
+    }
+    #[test]
+    fn server_starting_late_retains_observation_timestamp() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+        let mut aw = Adapter::new(addr.port(), "synthetic".into(), 5);
+        let timestamp = Utc::now() - chrono::Duration::seconds(20);
+        aw.enqueue(timestamp, Context::new(vec![connection()]));
+        aw.flush();
+        assert_eq!(aw.queue.len(), 1);
+        let server = protocol_server(
+            TcpListener::bind(addr).unwrap(),
+            vec![(200, json!({})), (200, json!({}))],
+        );
+        aw.flush();
+        assert!(aw.queue.is_empty());
+        let requests = server.join().unwrap();
+        assert_eq!(requests[1].1["timestamp"], timestamp.to_rfc3339());
+        assert_eq!(requests[1].1["duration"], 0);
+    }
+    #[test]
+    fn outage_and_server_restart_recreate_missing_bucket_and_resume() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = protocol_server(
+            listener,
+            vec![(200, json!({})), (200, json!({})), (503, json!({}))],
+        );
+        let mut aw = Adapter::new(addr.port(), "synthetic".into(), 5);
+        let before = Utc::now() - chrono::Duration::seconds(60);
+        aw.enqueue(before, Context::new(vec![connection()]));
+        aw.flush();
+        let after = before + chrono::Duration::seconds(30);
+        aw.enqueue(after, Context::new(vec![connection()]));
+        aw.flush();
+        assert_eq!(aw.queue.len(), 1);
+        let initial = server.join().unwrap();
+        aw.flush(); // Server process has stopped, keep the same observation.
+        assert_eq!(aw.queue.len(), 1);
+        let server = protocol_server(
+            TcpListener::bind(addr).unwrap(),
+            vec![(404, json!({})), (200, json!({})), (200, json!({}))],
+        );
+        aw.flush();
+        assert!(aw.created.is_empty());
+        assert_eq!(aw.queue.len(), 1);
+        aw.flush();
+        assert!(aw.queue.is_empty());
+        let resumed = server.join().unwrap();
+        assert_eq!(resumed[2].1, initial[2].1);
+        assert_eq!(resumed[2].1["timestamp"], after.to_rfc3339());
+        assert_eq!(resumed[2].1["duration"], 0);
+        // No stale interval is extended over the 30-second missing-observation gap.
+        assert_eq!(initial[1].1["timestamp"], before.to_rfc3339());
+        assert!(resumed[2].0.contains("pulsetime=6"));
+    }
+    #[test]
+    fn creation_failure_and_incompatible_existing_bucket_block_delivery() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = protocol_server(
+            listener,
+            vec![
+                (500, json!({})),
+                (304, json!({})),
+                (200, json!({"type":"wrong.type"})),
+                (304, json!({})),
+                (200, metadata()),
+                (200, json!({})),
+            ],
+        );
+        let mut aw = Adapter::new(port, "synthetic".into(), 5);
+        aw.enqueue(Utc::now(), Context::new(vec![connection()]));
+        for _ in 0..2 {
+            aw.flush();
+            assert_eq!(aw.queue.len(), 1);
+            assert!(aw.created.is_empty());
+        }
+        aw.flush();
+        assert!(aw.queue.is_empty());
+        let requests = server.join().unwrap();
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|r| r.0.contains("/heartbeat"))
+                .count(),
+            1
+        );
+    }
+    #[test]
+    fn redirects_and_heartbeat_304_are_not_delivery_success() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = protocol_server(
+            listener,
+            vec![
+                (301, json!({})),
+                (200, json!({})),
+                (304, json!({})),
+                (200, json!({})),
+            ],
+        );
+        let mut aw = Adapter::new(port, "synthetic".into(), 5);
+        aw.enqueue(Utc::now(), Context::new(vec![connection()]));
+        aw.flush();
+        assert!(aw.created.is_empty());
+        assert_eq!(aw.queue.len(), 1);
+        aw.flush();
+        assert_eq!(aw.queue.len(), 1);
+        aw.flush();
+        assert!(aw.queue.is_empty());
+        let requests = server.join().unwrap();
+        assert_eq!(requests[2].1, requests[3].1);
+    }
+    #[test]
+    fn unavailable_context_has_neutral_title() {
+        let mut unknown = connection();
+        unknown.customers.clear();
+        unknown.name = " ".into();
+        assert_eq!(
+            Context::new(vec![unknown]).title,
+            "Activity (context unavailable)"
+        );
     }
 }

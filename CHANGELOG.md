@@ -1,5 +1,12 @@
 # Releases
 
+## 0.2.3 — 2026-10-08
+
+- Limit HTTP 304 success to bucket creation; reject unexpected heartbeat and redirect responses instead of dropping undelivered observations.
+- Check the existing bucket's `vpn.context` type after 304 before delivering events. Log the concrete transport failure without event contents.
+- Use `Activity (context unavailable)` when a nonempty connection set has no readable names.
+- Add bounded loopback regressions for producer restart, late AW startup, outage/server restart, incompatible buckets, genuine failures, and original timestamp/gap preservation. All 33 Rust tests and warnings-denied Clippy pass; see `VALIDATION.md` for evidence and remaining real-host checks.
+
 ## 0.2.2 — 2026-10-08
 
 - Add AW event `title`: unique customer names sorted alphabetically and joined by `|`.

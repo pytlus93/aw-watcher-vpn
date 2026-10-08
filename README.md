@@ -4,7 +4,7 @@ Windows network-context module managed by ActivityWatch. One shared collector ob
 adapters, assigned addresses, DNS configuration and routes across VPN vendors.
 Customer rules produce assignment hints; they do not assign cases or bill time.
 
-Release 0.2.2 uses a Rust core and a built-in Windows PowerShell/.NET
+Release 0.2.3 uses a Rust core and a built-in Windows PowerShell/.NET
 collector. It requires Windows 10/11 with Windows PowerShell 5.1 and the NetTCPIP
 module. It requests no elevation, installs no driver, modifies no networking,
 and sends no probes or DNS queries. Enterprise policy can restrict collection;
@@ -21,7 +21,7 @@ cargo build --release
 ```
 
 `scripts/build.ps1 -Test -Package` creates
-`dist/aw-watcher-vpn-0.2.2-windows-x64.zip` and its `.sha256` checksum.
+`dist/aw-watcher-vpn-0.2.3-windows-x64.zip` and its `.sha256` checksum.
 The ZIP contains an `aw-watcher-vpn` folder with the executable, installer,
 naming shortcut, synthetic config example, README and license.
 
@@ -298,13 +298,13 @@ events in the planned review UI or inspect them through AW's bucket API.
 ## Limits and validation
 
 Validated on 2026-10-08 using Rust 1.99.0 and the installed MSVC toolchain:
-27 automated tests pass, including module config initialization/profile isolation,
+33 automated tests pass, including module config initialization/profile isolation,
 duplicate-instance locking, suppression of empty heartbeats,
 mixed known/unknown connections, exclusions,
 named merging, replacement and Windows atomic
 backup handling. Clippy passes with warnings denied, and the release
 binary's embedded Windows PowerShell collector and synthetic-profile dry run
-pass. The ZIP is `dist/aw-watcher-vpn-0.2.2-windows-x64.zip`. Automated AW delivery
+pass. The ZIP is `dist/aw-watcher-vpn-0.2.3-windows-x64.zip`. Automated AW delivery
 tests use a real loopback mock HTTP server. No real VPN connect/disconnect cycle
 or actual ActivityWatch server session has been validated yet.
 The synthetic Windows Forms test `tests/management-ui.ps1` validates listing two
@@ -329,6 +329,8 @@ claim is made before real connect/disconnect captures validate each profile.
 Validate standard-user capture, connect/disconnect, reconnect, sleep/resume,
 simultaneous tunnels, overlapping customer subnets, an AW outage/restart, and
 DNS/address changes. Generic tests use synthetic addresses only.
+
+See [VALIDATION.md](VALIDATION.md) for the 0.2.3 protocol review, deployed server schema evidence, restart/recovery regressions, and real-host acceptance checks.
 
 ## Architecture and references
 
