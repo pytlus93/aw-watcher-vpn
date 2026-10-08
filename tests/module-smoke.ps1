@@ -70,7 +70,7 @@ try {
     if ($duplicateExit -eq 0) { throw 'Duplicate module instance accepted' }
     Stop-Process -Id $process.Id; $process.WaitForExit(); $process = $null
     $version = & $installed --version
-    if ($LASTEXITCODE -ne 0 -or $version -ne 'aw-watcher-vpn 0.2.1') { throw 'Incorrect module version' }
+    if ($LASTEXITCODE -ne 0 -or $version -ne 'aw-watcher-vpn 0.2.2') { throw 'Incorrect module version' }
     $process = Start-Process -FilePath $installed -ArgumentList '--testing' -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testRoot 'testing-out.log') -RedirectStandardError (Join-Path $testRoot 'testing-err.log')
     Start-Sleep -Seconds 2
     if ($process.HasExited) { throw 'AW --testing launch exited' }

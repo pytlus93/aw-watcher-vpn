@@ -4,7 +4,7 @@ Windows network-context module managed by ActivityWatch. One shared collector ob
 adapters, assigned addresses, DNS configuration and routes across VPN vendors.
 Customer rules produce assignment hints; they do not assign cases or bill time.
 
-Release 0.2.1 uses a Rust core and a built-in Windows PowerShell/.NET
+Release 0.2.2 uses a Rust core and a built-in Windows PowerShell/.NET
 collector. It requires Windows 10/11 with Windows PowerShell 5.1 and the NetTCPIP
 module. It requests no elevation, installs no driver, modifies no networking,
 and sends no probes or DNS queries. Enterprise policy can restrict collection;
@@ -21,7 +21,7 @@ cargo build --release
 ```
 
 `scripts/build.ps1 -Test -Package` creates
-`dist/aw-watcher-vpn-0.2.1-windows-x64.zip` and its `.sha256` checksum.
+`dist/aw-watcher-vpn-0.2.2-windows-x64.zip` and its `.sha256` checksum.
 The ZIP contains an `aw-watcher-vpn` folder with the executable, installer,
 naming shortcut, synthetic config example, README and license.
 
@@ -266,12 +266,18 @@ old watcher and replace its executable to switch; the config needs no changes.
 ```json
 {
   "schema_version": 3,
+  "title": "Customer A|VPN B",
   "connections": [
     {"id": "synthetic-adapter-a", "name": "VPN A", "customers": ["Customer A"]},
     {"id": "synthetic-adapter-b", "name": "VPN B", "customers": [], "suggested_name": "customer-b.example"}
   ]
 }
 ```
+
+`title` is the alphabetical, case-insensitively deduplicated list of customer
+names joined with `|` (no surrounding spaces), for example `Customer A|Customer B`.
+Unnamed connections contribute their observed connection name until named.
+Ignored connections never contribute to the title. Details remain in `connections`.
 
 No active tunnels produces no AW heartbeat. Collection failure also emits no
 heartbeat, leaving a gap. An empty set is retained only in local management
@@ -291,14 +297,14 @@ events in the planned review UI or inspect them through AW's bucket API.
 
 ## Limits and validation
 
-Validated on 2026-10-06 using Rust 1.99.0 and the installed MSVC toolchain:
-26 automated tests pass, including module config initialization/profile isolation,
+Validated on 2026-10-08 using Rust 1.99.0 and the installed MSVC toolchain:
+27 automated tests pass, including module config initialization/profile isolation,
 duplicate-instance locking, suppression of empty heartbeats,
 mixed known/unknown connections, exclusions,
 named merging, replacement and Windows atomic
 backup handling. Clippy passes with warnings denied, and the release
 binary's embedded Windows PowerShell collector and synthetic-profile dry run
-pass. The ZIP is `dist/aw-watcher-vpn-0.2.1-windows-x64.zip`. Automated AW delivery
+pass. The ZIP is `dist/aw-watcher-vpn-0.2.2-windows-x64.zip`. Automated AW delivery
 tests use a real loopback mock HTTP server. No real VPN connect/disconnect cycle
 or actual ActivityWatch server session has been validated yet.
 The synthetic Windows Forms test `tests/management-ui.ps1` validates listing two

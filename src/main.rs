@@ -105,12 +105,35 @@ struct Pending {
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Context {
     schema_version: u32,
+    #[serde(default)]
+    title: String,
     connections: Vec<Connection>,
 }
 impl Context {
     fn new(connections: Vec<Connection>) -> Self {
+        let mut names: Vec<String> = connections
+            .iter()
+            .flat_map(|c| {
+                if c.customers.is_empty() {
+                    vec![c.name.trim().to_string()]
+                } else {
+                    c.customers
+                        .iter()
+                        .map(|name| name.trim().to_string())
+                        .collect()
+                }
+            })
+            .filter(|name| !name.is_empty())
+            .collect();
+        names.sort_by(|a, b| {
+            a.to_lowercase()
+                .cmp(&b.to_lowercase())
+                .then_with(|| a.cmp(b))
+        });
+        names.dedup_by(|a, b| a.to_lowercase() == b.to_lowercase());
         Self {
             schema_version: 3,
+            title: names.join("|"),
             connections,
         }
     }
@@ -793,6 +816,7 @@ mod tests {
         assert_eq!(requests[0].1["type"], "vpn.context");
         assert!(requests[2].0.contains("heartbeat?pulsetime=6"));
         assert_eq!(requests[2].1["data"]["schema_version"], 3);
+        assert_eq!(requests[2].1["data"]["title"], "Synthetic A|Synthetic VPN");
         assert_eq!(
             requests[2].1["data"]["connections"]
                 .as_array()
@@ -835,5 +859,21 @@ mod tests {
         aw.flush();
         assert!(aw.queue.is_empty());
         assert!(aw.created.is_empty());
+    }
+    #[test]
+    fn title_is_alphabetical_unique_and_preserves_unnamed_connections() {
+        let mut a = connection();
+        a.customers = vec!["zeta".into(), " Alpha ".into(), "Beta".into()];
+        let mut b = connection();
+        b.customers = vec!["alpha".into()];
+        let mut unknown = connection();
+        unknown.customers.clear();
+        unknown.name = "Unknown VPN".into();
+        let context = Context::new(vec![a.clone(), b.clone(), unknown.clone()]);
+        assert_eq!(context.title, "Alpha|Beta|Unknown VPN|zeta");
+        assert_eq!(Context::new(vec![unknown, b, a]).title, context.title);
+        assert!(Context::new(vec![]).title.is_empty());
+        let old: Context = parse_json(r#"{"schema_version":3,"connections":[]}"#).unwrap();
+        assert!(old.title.is_empty());
     }
 }

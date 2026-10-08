@@ -1,5 +1,14 @@
 # Releases
 
+## 0.2.2 — 2026-10-08
+
+- Add AW event `title`: unique customer names sorted alphabetically and joined by `|`.
+- Use the observed connection name for an unnamed connection; ignored VPNs remain excluded.
+- Keep detailed connection metadata and suppress empty heartbeats.
+- Read older local context files without a title.
+
+Validated with 27 Rust tests, including the loopback heartbeat payload.
+
 ## 0.2.1 — 2026-10-06
 
 - Ignore selected connection names, even when they have a learned customer profile.
