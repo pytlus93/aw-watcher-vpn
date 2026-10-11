@@ -1,3 +1,8 @@
+# Tray action validation — 2026-10-11, version 0.2.5
+
+PASS: 38 Rust tests, Clippy, release package, tests/module-actions.ps1 and tests/module-smoke.ps1. Action context/dispatch, server-unavailable resolution, held producer lock, manual compatibility, sidecar copy/rollback/restoration and native job-owned helper cleanup are isolated evidence. Transport regressions still verify actual loopback heartbeat resumption. See MODULE_ACTIONS.md for full action and lifecycle limitations. No installed tray clicks/dialogs, deployment, reboot or actual server combinations were exercised. No workflows added.
+
+---
 # Validation update — 2026-10-11, version 0.2.4
 
 - PASS: 35 Rust tests, warnings-denied Clippy, release build. Existing loopback tests still verify first/existing creation (304 only on creation), producer restart, late server startup, outage/server restart and actual heartbeat delivery resumption. Zero-duration original observation timestamps and pulsetime gaps remain preserved.

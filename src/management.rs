@@ -222,6 +222,30 @@ pub fn launch(path: &str, notification: bool) -> Result<(), String> {
     );
     spawn_script(&(bootstrap + include_str!("../scripts/manage.ps1")))
 }
+#[cfg(windows)]
+pub fn launch_owned(path: &str) -> Result<(), String> {
+    let config_path = fs::canonicalize(path).map_err(|e| e.to_string())?;
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let decode = |s: &str| {
+        format!(
+            "[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{}'))",
+            base64::engine::general_purpose::STANDARD.encode(s.as_bytes())
+        )
+    };
+    let bootstrap = format!(
+        "$configPath = {}; $watcherExe = {}; $notificationMessage = {}; $watcherPid = {};\n",
+        decode(&config_path.to_string_lossy()),
+        decode(&exe.to_string_lossy()),
+        "$false",
+        0
+    );
+    owned_helper::run(&(bootstrap + "Remove-Item Env:AW_MODULE_ACTION_PROTOCOL,Env:AW_MODULE_ACTION -ErrorAction SilentlyContinue;\n" + include_str!("../scripts/manage.ps1")))
+}
+
+#[cfg(not(windows))]
+pub fn launch_owned(_path: &str) -> Result<(), String> {
+    Err("Action UI requires Windows".into())
+}
 #[cfg(not(windows))]
 pub fn launch(_path: &str, _notification: bool) -> Result<(), String> {
     Err("management window requires Windows".into())

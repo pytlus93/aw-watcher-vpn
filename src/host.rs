@@ -138,16 +138,33 @@ impl Options {
         Ok(o)
     }
 }
+pub fn log_path(path: &Path, testing: bool, custom: bool) -> Result<PathBuf, String> {
+    Ok(if custom {
+        path.with_extension("log")
+    } else {
+        path.parent()
+            .and_then(Path::parent)
+            .ok_or("config parent missing")?
+            .join("Logs")
+            .join("aw-watcher-vpn")
+            .join(if testing {
+                "aw-watcher-vpn-testing.log"
+            } else {
+                "aw-watcher-vpn.log"
+            })
+    })
+}
 pub fn launch(args: &[String]) -> Result<(), String> {
     if args == ["--help"] {
-        println!("aw-watcher-vpn [--config PATH] [--testing] [--once] [--dry-run] [--no-autolearn] [--no-notify]\nNo arguments: run as an ActivityWatch module.\n--init-config: initialize config without overwriting and print its path.\n--config-path: print config path without writing.\n--validate-config: validate settings without collection or AW requests.\nmanage [CONFIG]: open unnamed connections.\nLegacy snapshot/evaluate/learn/name/run commands remain available.");
+        println!("aw-watcher-vpn [--config PATH] [--testing] [--once] [--dry-run] [--no-autolearn] [--no-notify]\nNo arguments: run as an ActivityWatch module.\n--init-config: initialize config without overwriting and print its path.\n--config-path: print config path without writing.\n--validate-config: validate settings without collection or AW requests.\nconfigure / open-logs / about [--config PATH] [--testing]: tray actions with manual fallback.\nmanage [CONFIG]: open unnamed connections.\nLegacy snapshot/evaluate/learn/name/run commands remain available.");
         return Ok(());
     }
     if args == ["--version"] {
         println!("aw-watcher-vpn {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
-    let o = Options::parse(args)?;
+    let mut o = Options::parse(args)?;
+    o.testing = actions::testing(o.testing)?;
     let custom = o.config.is_some();
     let path = match o.config {
         Some(path) => path,
@@ -168,20 +185,7 @@ pub fn launch(args: &[String]) -> Result<(), String> {
         println!("{}", path.display());
         return Ok(());
     }
-    let log = if custom {
-        path.with_extension("log")
-    } else {
-        path.parent()
-            .and_then(Path::parent)
-            .ok_or("config parent missing")?
-            .join("Logs")
-            .join("aw-watcher-vpn")
-            .join(if o.testing {
-                "aw-watcher-vpn-testing.log"
-            } else {
-                "aw-watcher-vpn.log"
-            })
-    };
+    let log = log_path(&path, o.testing, custom)?;
     if let Some(parent) = log.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }

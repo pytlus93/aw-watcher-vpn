@@ -58,6 +58,10 @@ $destination = Join-Path $installRoot 'aw-watcher-vpn'
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
 $installedExe = Join-Path $destination 'aw-watcher-vpn.exe'
 Copy-Item -LiteralPath $Executable -Destination $installedExe -Force
+$actionSource = $Executable + '.actions.json'
+$actionDestination = $installedExe + '.actions.json'
+if (Test-Path -LiteralPath $actionSource) { Copy-Item -LiteralPath $actionSource -Destination $actionDestination -Force }
+elseif (Test-Path -LiteralPath $actionDestination) { Remove-Item -LiteralPath $actionDestination }
 $namingCommand = Join-Path $PSScriptRoot 'name-connections.cmd'
 if (Test-Path -LiteralPath $namingCommand) { Copy-Item -LiteralPath $namingCommand -Destination $destination -Force }
 if ($ProfileConfig) {

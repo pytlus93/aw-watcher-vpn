@@ -56,6 +56,14 @@ try {
     $env:AW_PROFILE = ''
     $testingPath = & $installed --testing --init-config
     if ($testingPath -eq $normalPath -or $testingPath -notlike '*config-testing.json') { throw 'Testing isolation failed' }
+    if (-not (Test-Path -LiteralPath ($installed + '.actions.json'))) { throw 'Installer omitted action sidecar' }
+    $legacySource = Join-Path $testRoot 'legacy\aw-watcher-vpn.exe'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $legacySource) | Out-Null
+    Copy-Item -LiteralPath $Executable -Destination $legacySource
+    & (Join-Path $root 'scripts\install.ps1') -ActivityWatchDirectory $mockInstall -Executable $legacySource -NoAutostart | Out-Null
+    if (Test-Path -LiteralPath ($installed + '.actions.json')) { throw 'Rollback left a stale action sidecar' }
+    & (Join-Path $root 'scripts\install.ps1') -ActivityWatchDirectory $mockInstall -Executable $Executable -NoAutostart | Out-Null
+    if (-not (Test-Path -LiteralPath ($installed + '.actions.json'))) { throw 'Reinstallation did not restore matching sidecar' }
     # Force collector failure: launcher lifetime is tested without sampling real
     # network data or ever enqueueing anything to the user's AW server.
     $env:SystemRoot = Join-Path $testRoot 'missing-windows'
@@ -95,7 +103,7 @@ try {
     [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\manage.ps1'), [ref]$tokens, [ref]$parseErrors)
     if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
     $version = & $installed --version
-    if ($LASTEXITCODE -ne 0 -or $version -ne 'aw-watcher-vpn 0.2.4') { throw 'Incorrect module version' }
+    if ($LASTEXITCODE -ne 0 -or $version -ne 'aw-watcher-vpn 0.2.5') { throw 'Incorrect module version' }
     $process = Start-Process -FilePath $installed -ArgumentList '--testing' -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testRoot 'testing-out.log') -RedirectStandardError (Join-Path $testRoot 'testing-err.log')
     Start-Sleep -Seconds 2
     if ($process.HasExited) { throw 'AW --testing launch exited' }

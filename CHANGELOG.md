@@ -1,5 +1,11 @@
 # Releases
 
+## 0.2.5 — 2026-10-11
+
+- Implement aw-qt tray actions protocol 1: configuration/privacy UI, redacted diagnostics and About, dispatched before producer locking/collection.
+- Share profile/testing and loopback server context with startup. Own UI descendants through a kill-on-close Windows job; retain manual CLI fallback and host-owned lifecycle.
+- Package/install the exact executable actions sidecar, remove it on rollback to a source without one, and validate isolated manifest/dispatch/context/ownership behavior locally. 38 Rust tests, Clippy, module/action smoke and packaging pass; actual installed tray/dialog behavior remains unverified.
+
 ## 0.2.4 — 2026-10-11
 
 - Add strict title-only and configurable extended payloads with individual field controls in the module management UI. Disabled customer/connection names are removed from titles and event exports; privacy changes discard queued observations.

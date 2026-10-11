@@ -10,8 +10,10 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+mod actions;
 mod host;
 mod management;
+mod owned_helper;
 mod payload;
 macro_rules! diag { ($($arg:tt)*) => { host::record(&format!($($arg)*)) }; }
 fn parse_json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, String> {
@@ -324,6 +326,7 @@ fn run(
         })
         .collect();
     let mut aw = Adapter::new(if testing { 5666 } else { 5600 }, host, config.poll_seconds);
+    aw.base = format!("{}/api/0", actions::server_url(actions::testing(testing)?)?);
     let mut previous: Option<Context> = None;
     loop {
         let start = Instant::now();
@@ -447,6 +450,9 @@ fn run(
 }
 fn main_result() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(result) = actions::dispatch(&args) {
+        return result;
+    }
     if args.is_empty() || args[0].starts_with("--") {
         return host::launch(&args);
     }
