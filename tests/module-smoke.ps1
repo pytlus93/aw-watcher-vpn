@@ -69,13 +69,38 @@ try {
     $ErrorActionPreference = $savedPreference
     if ($duplicateExit -eq 0) { throw 'Duplicate module instance accepted' }
     Stop-Process -Id $process.Id; $process.WaitForExit(); $process = $null
+    # Host-style crash/relaunch: only this synthetic installed process is terminated.
+    $process = Start-Process -FilePath $installed -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testRoot ('relaunch-' + [Guid]::NewGuid().ToString('N') + '.out')) -RedirectStandardError (Join-Path $testRoot ('relaunch-' + [Guid]::NewGuid().ToString('N') + '.err'))
+    Start-Sleep -Seconds 1
+    if ($process.HasExited) { throw 'Relaunch after explicit stop failed' }
+    $process.Kill(); $process.WaitForExit(); $process = $null
+    $process = Start-Process -FilePath $installed -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testRoot ('relaunch-' + [Guid]::NewGuid().ToString('N') + '.out')) -RedirectStandardError (Join-Path $testRoot ('relaunch-' + [Guid]::NewGuid().ToString('N') + '.err'))
+    Start-Sleep -Seconds 1
+    if ($process.HasExited) { throw 'Relaunch after crash failed to release instance lock' }
+    Stop-Process -Id $process.Id; $process.WaitForExit(); $process = $null
+    Start-Sleep -Seconds 1
+    if (Get-Process aw-watcher-vpn -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $installed }) { throw 'Module relaunched itself after an intentional stop' }
+    $failedLaunch = $false
+    try { Start-Process -FilePath (Join-Path $testRoot 'missing-module.exe') -WindowStyle Hidden -ErrorAction Stop | Out-Null } catch { $failedLaunch = $true }
+    if (-not $failedLaunch) { throw 'Missing executable did not fail launch' }
+    $policy = & $installed payload $normalPath | ConvertFrom-Json
+    if ($policy.mode -ne 'strict' -or -not $policy.customers -or $policy.connection_ids -or $policy.connection_names -or $policy.suggested_names) { throw 'Unsafe payload migration defaults' }
+    $policy.mode = 'extended'; $policy.customers = $false; $policy.connection_ids = $true
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($policy | ConvertTo-Json -Compress)))
+    & $installed payload $normalPath --base64 $encoded
+    if ($LASTEXITCODE -ne 0) { throw 'Payload settings save failed' }
+    $saved = & $installed payload $normalPath | ConvertFrom-Json
+    if ($saved.mode -ne 'extended' -or $saved.customers -or -not $saved.connection_ids) { throw 'Payload settings were not persisted' }
+    $tokens = $null; $parseErrors = $null
+    [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\manage.ps1'), [ref]$tokens, [ref]$parseErrors)
+    if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
     $version = & $installed --version
-    if ($LASTEXITCODE -ne 0 -or $version -ne 'aw-watcher-vpn 0.2.3') { throw 'Incorrect module version' }
+    if ($LASTEXITCODE -ne 0 -or $version -ne 'aw-watcher-vpn 0.2.4') { throw 'Incorrect module version' }
     $process = Start-Process -FilePath $installed -ArgumentList '--testing' -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testRoot 'testing-out.log') -RedirectStandardError (Join-Path $testRoot 'testing-err.log')
     Start-Sleep -Seconds 2
     if ($process.HasExited) { throw 'AW --testing launch exited' }
     Stop-Process -Id $process.Id; $process.WaitForExit(); $process = $null
-    'Module smoke tests passed: installer preservation/idempotence, default/profile/testing configuration, no-argument/testing lifetime, duplicate-instance guard.'
+    'Module smoke tests passed: installer preservation/idempotence, default/profile/testing configuration, no-argument/testing lifetime, duplicate-instance guard, crash/relaunch lock release, intentional stop, failed launch and payload settings persistence.'
 } finally {
     if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id }
     $env:LOCALAPPDATA = $oldAppData; $env:AW_PROFILE = $oldProfile; $env:SystemRoot = $oldSystemRoot

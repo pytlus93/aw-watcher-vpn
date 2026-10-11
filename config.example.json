@@ -9,11 +9,27 @@
       "id": "customer-a",
       "customer_hint": "Synthetic Customer A",
       "rules": {
-        "description_contains": ["Synthetic VPN Adapter"],
-        "dns_suffixes": ["customer-a.example"],
-        "route_prefixes": ["203.0.113.0/24"]
+        "description_contains": [
+          "Synthetic VPN Adapter"
+        ],
+        "dns_suffixes": [
+          "customer-a.example"
+        ],
+        "route_prefixes": [
+          "203.0.113.0/24"
+        ]
       },
-      "destinations": ["203.0.113.10"]
+      "destinations": [
+        "203.0.113.10"
+      ]
     }
-  ]
+  ],
+  "payload": {
+    "mode": "strict",
+    "schema_version": false,
+    "connection_ids": false,
+    "connection_names": false,
+    "customers": true,
+    "suggested_names": false
+  }
 }

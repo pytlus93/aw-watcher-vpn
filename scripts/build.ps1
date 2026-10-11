@@ -22,7 +22,7 @@ try {
         if (-not $version) { throw 'Cannot determine package version' }
         $stage = Join-Path $root ("dist\package-$version-" + [Guid]::NewGuid().ToString('N') + '\aw-watcher-vpn')
         New-Item -ItemType Directory -Path $stage -Force | Out-Null
-        Copy-Item -LiteralPath $binary,README.md,CHANGELOG.md,VALIDATION.md,config.example.json,LICENSE,scripts\install.ps1,scripts\name-connections.cmd -Destination $stage -Force
+        Copy-Item -LiteralPath $binary,README.md,CHANGELOG.md,VALIDATION.md,DATA_FIELDS.md,config.example.json,LICENSE,scripts\install.ps1,scripts\name-connections.cmd -Destination $stage -Force
         Compress-Archive -LiteralPath $stage -DestinationPath "dist\aw-watcher-vpn-$version-windows-x64.zip" -Force
         $zip = Join-Path $root "dist\aw-watcher-vpn-$version-windows-x64.zip"
         [IO.File]::WriteAllText(($zip + '.sha256'), ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($zip) + "`n"), [Text.UTF8Encoding]::new($false))

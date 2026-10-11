@@ -1,5 +1,11 @@
 # Releases
 
+## 0.2.4 — 2026-10-11
+
+- Add strict title-only and configurable extended payloads with individual field controls in the module management UI. Disabled customer/connection names are removed from titles and event exports; privacy changes discard queued observations.
+- Migrate missing settings conservatively, remove identifying diagnostics/notification text, document every data field and custom contract separately from official AW types.
+- Add privacy/settings and isolated crash/relaunch/stop regressions. 35 Rust tests, Clippy, packaging and module smoke checks pass; the new dialog is syntax checked but not visually validated. Real-host/reboot recovery remains an acceptance check.
+
 ## 0.2.3 — 2026-10-08
 
 - Limit HTTP 304 success to bucket creation; reject unexpected heartbeat and redirect responses instead of dropping undelivered observations.

@@ -120,6 +120,7 @@ pub fn name_connection(path: &str, id: &str, name: &str, replace: bool) -> Resul
         autolearn: true,
         notify: true,
         ignored_connections: vec![],
+        payload: Default::default(),
         profiles: vec![aw_watcher_vpn::Profile {
             id: "draft".into(),
             customer_hint: String::new(),
@@ -155,6 +156,13 @@ pub fn set_ignored(path: &str, name: &str, ignored: bool) -> Result<(), String> 
     if before == config.ignored_connections {
         return Ok(());
     }
+    config.validate()?;
+    save_config(path, Some(&existing), &config)
+}
+pub fn set_payload(path: &str, settings: aw_watcher_vpn::PayloadSettings) -> Result<(), String> {
+    let existing = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let mut config: Config = parse_json(&existing)?;
+    config.payload = settings;
     config.validate()?;
     save_config(path, Some(&existing), &config)
 }
@@ -220,8 +228,8 @@ pub fn launch(_path: &str, _notification: bool) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-pub fn notify_only(name: &str) -> Result<(), String> {
-    let message = base64::engine::general_purpose::STANDARD.encode(format!("Unnamed VPN connection: {name}. Auto-learning is disabled; use before/after learning to name it.").as_bytes());
+pub fn notify_only(_name: &str) -> Result<(), String> {
+    let message = base64::engine::general_purpose::STANDARD.encode(b"Unnamed connection detected. Auto-learning is disabled; use before/after learning to name it.");
     spawn_script(&format!("Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; $n.Visible = $true; $m = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{message}')); $n.ShowBalloonTip(5000, 'ActivityWatch VPN', $m, [System.Windows.Forms.ToolTipIcon]::Info); Start-Sleep -Seconds 6; $n.Dispose()"))
 }
 #[cfg(not(windows))]

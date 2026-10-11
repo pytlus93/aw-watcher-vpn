@@ -1,3 +1,15 @@
+# Validation update — 2026-10-11, version 0.2.4
+
+- PASS: 35 Rust tests, warnings-denied Clippy, release build. Existing loopback tests still verify first/existing creation (304 only on creation), producer restart, late server startup, outage/server restart and actual heartbeat delivery resumption. Zero-duration original observation timestamps and pulsetime gaps remain preserved.
+- PASS: privacy projection for strict and each extended choice, omitted disabled fields, title redaction/neutral fallback, serializer title-before-extensions order, invalid settings rejection, atomic persistence, and backlog removal on privacy changes. Missing payload settings migrate to conservative defaults. Field inventory and migration are in DATA_FIELDS.md.
+- PASS: isolated module smoke checks validate installer idempotence/settings preservation, duplicate rejection, no-argument/testing lifetime, host-style termination/relaunch with lock release, explicit stop without self-respawn, missing executable launch failure, and CLI payload settings persistence. These are module/launcher checks, not proof of the installed host's restart scheduler.
+- UI evidence: new Payload dialog parsed successfully under Windows PowerShell 5.1. No interactive dialog was opened or visually validated during this task; previous naming UI evidence does not validate these new controls.
+- Source-only architecture: sibling aw-qt manager retains desired started state on failed launch; recovery.py retries with bounded 5-to-300-second backoff, retains per-module retry state, and forgets intentional stops. This component neither modifies nor replaces that host. Installed aw-qt recovery behavior, hard-restart login startup, failed-relaunch recovery and crash recovery still require real-host acceptance. No reboot was attempted.
+- Read-only deployed evidence: server v0.13.2 and published heartbeat schema confirmed again. No production event queries, VPN captures, synthetic production writes or replacement installation were performed. Actual AW storage/API key order, GUI tooltip presentation, real VPN transitions and foreground/idle joins remain unverified. VPN presence deliberately remains independent of foreground/idle because it is a context hint, never a work-duration metric; consumers must intersect it with foreground/AFK activity for attribution.
+
+The first sandbox run failed due to denied socket/atomic-file operations; the same regressions passed outside those sandbox restrictions. A synthetic launcher test initially used shell execution with an intentionally invalid SystemRoot; using redirected CreateProcess corrected that harness issue. These were harness/environment failures rather than claimed successful runtime tests.
+
+---
 # VPN module validation — 2026-10-08
 
 Version: 0.2.3. Rust 1.99.0/MSVC, Windows PowerShell 5.1. This component remains an ActivityWatch-managed module in its independent Git repository. The installed 0.2.2 module was not changed during this validation.

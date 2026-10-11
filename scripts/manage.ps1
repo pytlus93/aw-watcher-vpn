@@ -29,7 +29,7 @@ public static class VpnManagerWindow {
 }
 $form = New-Object Windows.Forms.Form
 $form.Text = "ActivityWatch - Unnamed VPN connections ($configPath)"
-$form.Size = New-Object Drawing.Size(820, 510)
+$form.Size = New-Object Drawing.Size(950, 510)
 $form.MinimumSize = New-Object Drawing.Size(680, 440)
 $form.StartPosition = 'CenterScreen'
 $form.Padding = New-Object Windows.Forms.Padding(12)
@@ -87,7 +87,10 @@ $ignoredSettings.AutoSize = $true
 $status = New-Object Windows.Forms.Label
 $status.AutoSize = $true
 $status.Padding = New-Object Windows.Forms.Padding(8)
-$buttons.Controls.AddRange(@($save, $ignore, $ignoredSettings, $refresh, $status))
+$payloadSettings = New-Object Windows.Forms.Button
+$payloadSettings.Text = 'Payload...'
+$payloadSettings.AutoSize = $true
+$buttons.Controls.AddRange(@($save, $ignore, $ignoredSettings, $payloadSettings, $refresh, $status))
 $layout.Controls.Add($buttons, 0, 5)
 
 function Refresh-Connections {
@@ -192,6 +195,56 @@ $ignoredSettings.Add_Click({
         $dialog.Close()
     } else { [void]$dialog.ShowDialog($form) }
     $dialog.Dispose()
+})
+$payloadSettings.Add_Click({
+    $dialog = New-Object Windows.Forms.Form
+    $dialog.Text = 'ActivityWatch VPN payload settings'
+    $dialog.Size = New-Object Drawing.Size(510, 400)
+    $dialog.StartPosition = 'CenterParent'
+    try {
+        $output = & $watcherExe payload $configPath 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
+        $policy = ($output -join [Environment]::NewLine) | ConvertFrom-Json
+        $hint = New-Object Windows.Forms.Label
+        $hint.Text = 'Strict sends only the workspace title. Extended adds selected fields. Customer/name choices also control title content.'
+        $hint.Location = New-Object Drawing.Point(12, 12)
+        $hint.Size = New-Object Drawing.Size(465, 45)
+        $mode = New-Object Windows.Forms.ComboBox
+        $mode.DropDownStyle = 'DropDownList'
+        $mode.Location = New-Object Drawing.Point(12, 60)
+        [void]$mode.Items.AddRange(@('strict', 'extended'))
+        $mode.SelectedItem = [string]$policy.mode
+        $dialog.Controls.AddRange(@($hint, $mode))
+        $choices = [ordered]@{customers='Customer labels (also in title)';connection_names='Connection names (also unknown title)';connection_ids='Connection IDs';suggested_names='DNS-derived name suggestions';schema_version='Custom schema version'}
+        $checks = @{}
+        $top = 100
+        foreach ($key in $choices.Keys) {
+            $check = New-Object Windows.Forms.CheckBox
+            $check.Text = $choices[$key]
+            $check.Checked = [bool]$policy.$key
+            $check.Location = New-Object Drawing.Point(12, $top)
+            $check.Size = New-Object Drawing.Size(460, 25)
+            $dialog.Controls.Add($check)
+            $checks[$key] = $check
+            $top += 30
+        }
+        $apply = New-Object Windows.Forms.Button
+        $apply.Text = 'Save'
+        $apply.Location = New-Object Drawing.Point(12, 280)
+        $apply.Add_Click({
+            try {
+                $value = @{mode=[string]$mode.SelectedItem}
+                foreach ($key in $choices.Keys) { $value[$key] = $checks[$key].Checked }
+                $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($value | ConvertTo-Json -Compress)))
+                $output = & $watcherExe payload $configPath --base64 $encoded 2>&1
+                if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
+                $dialog.Close()
+            } catch { [void][Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Could not save payload settings') }
+        })
+        $dialog.Controls.Add($apply)
+        [void]$dialog.ShowDialog($form)
+    } catch { [void][Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Could not open payload settings') }
+    finally { $dialog.Dispose() }
 })
 $save.Add_Click({
     if ($list.SelectedItems.Count -eq 0 -or -not $name.Text.Trim()) { $status.Text = 'Select a connection and enter a name.'; return }

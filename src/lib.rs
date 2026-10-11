@@ -48,7 +48,38 @@ pub struct Config {
     #[serde(default)]
     pub ignored_connections: Vec<String>,
     #[serde(default)]
+    pub payload: PayloadSettings,
+    #[serde(default)]
     pub profiles: Vec<Profile>,
+}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PayloadMode {
+    #[default]
+    Strict,
+    Extended,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PayloadSettings {
+    pub mode: PayloadMode,
+    pub schema_version: bool,
+    pub connection_ids: bool,
+    pub connection_names: bool,
+    pub customers: bool,
+    pub suggested_names: bool,
+}
+impl Default for PayloadSettings {
+    fn default() -> Self {
+        Self {
+            mode: PayloadMode::Strict,
+            schema_version: false,
+            connection_ids: false,
+            connection_names: false,
+            customers: true,
+            suggested_names: false,
+        }
+    }
 }
 fn default_interval() -> u64 {
     5
@@ -434,6 +465,7 @@ pub fn learn(before: &Snapshot, after: &Snapshot) -> Config {
         autolearn: true,
         notify: true,
         ignored_connections: vec![],
+        payload: Default::default(),
         profiles,
     }
 }

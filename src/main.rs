@@ -12,6 +12,7 @@ use std::{
 };
 mod host;
 mod management;
+mod payload;
 macro_rules! diag { ($($arg:tt)*) => { host::record(&format!($($arg)*)) }; }
 fn parse_json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, String> {
     serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())
@@ -149,6 +150,7 @@ struct Adapter {
     pulse: u64,
     created: HashSet<String>,
     queue: VecDeque<Pending>,
+    payload: aw_watcher_vpn::PayloadSettings,
 }
 impl Adapter {
     fn new(port: u16, host: String, interval: u64) -> Self {
@@ -163,6 +165,13 @@ impl Adapter {
             pulse: interval + 1,
             created: HashSet::new(),
             queue: VecDeque::new(),
+            payload: Default::default(),
+        }
+    }
+    fn set_payload(&mut self, settings: &aw_watcher_vpn::PayloadSettings) {
+        if &self.payload != settings {
+            self.queue.clear(); // Never retry previously enabled private fields after a policy change.
+            self.payload = settings.clone();
         }
     }
     fn enqueue(&mut self, timestamp: DateTime<Utc>, data: Context) {
@@ -220,7 +229,11 @@ impl Adapter {
                 "{}/buckets/{}/heartbeat?pulsetime={}",
                 self.base, p.bucket, self.pulse
             ))
-            .send_json(json!({"timestamp":p.timestamp.to_rfc3339(), "duration":0, "data":p.data}));
+            .send_json(payload::Event {
+                timestamp: p.timestamp.to_rfc3339(),
+                duration: 0,
+                data: &payload::EventData::new(&p.data, &self.payload),
+            });
         if matches!(result, Err(ureq::Error::Status(404, _))) {
             self.created.remove(&p.bucket);
         }
@@ -319,6 +332,7 @@ fn run(
             Err(e) => diag!("Config reload failed: {e}; retaining previous rules"),
         }
         aw.pulse = config.poll_seconds + 1;
+        aw.set_payload(&config.payload);
         let autolearn = autolearn && config.autolearn;
         let notify = notify && config.notify;
         let snapshot = match capture() {
@@ -375,7 +389,7 @@ fn run(
                             continue;
                         }
                     }
-                    diag!("Unnamed VPN {:?}, connection ID {:?}, suggested name {:?}. Use: aw-watcher-vpn name <config> <connection-id> --name <customer>", connection.name, connection.id, connection.suggested_name);
+                    diag!("Unnamed connection detected. Open management to review it.");
                     if notify && !dry_run {
                         if autolearn {
                             if let Err(e) = notify_unknown(config_path) {
@@ -398,8 +412,12 @@ fn run(
                 }
                 println!(
                     "{}",
-                    serde_json::to_string(&json!({"observed_at":now, "data":context}))
-                        .map_err(|e| e.to_string())?
+                    serde_json::to_string(&payload::Event {
+                        timestamp: now.to_rfc3339(),
+                        duration: 0,
+                        data: &payload::EventData::new(&context, &config.payload)
+                    })
+                    .map_err(|e| e.to_string())?
                 );
                 previous = Some(context.clone());
             }
@@ -434,7 +452,7 @@ fn main_result() -> Result<(), String> {
     }
     match args.first().map(String::as_str) {
         Some("snapshot") if args.len() == 2 => write_json(&args[1], &capture()?),
-        Some("evaluate") if args.len() == 3 => write_json("-", &Context::new(active_connections(&read_config(&args[1])?, &read_snapshot(&args[2])?))),
+        Some("evaluate") if args.len() == 3 => { let config = read_config(&args[1])?; write_json("-", &payload::EventData::new(&Context::new(active_connections(&config, &read_snapshot(&args[2])?)), &config.payload)) },
         Some("learn") if args.len() >= 4 => {
             let mut name = None;
             let mut replace = false;
@@ -457,7 +475,7 @@ fn main_result() -> Result<(), String> {
                 };
                 let config = match &existing {
                     Some(text) => parse_json(text)?,
-                    None => Config { schema_version: 1, poll_seconds: 5, autolearn: true, notify: true, ignored_connections: vec![], profiles: vec![] },
+                    None => Config { schema_version: 1, poll_seconds: 5, autolearn: true, notify: true, ignored_connections: vec![], payload: Default::default(), profiles: vec![] },
                 };
                 let merged = merge_profile(config, draft, name, replace)?;
                 save_config(&args[3], existing.as_deref(), &merged)?;
@@ -469,6 +487,12 @@ fn main_result() -> Result<(), String> {
             }
         }
         Some("name") if (args.len() == 5 || (args.len() == 6 && args[5] == "--replace")) && args[3] == "--name" => management::name_connection(&args[1], &args[2], &args[4], args.len() == 6),
+        Some("payload") if args.len() == 2 => write_json("-", &read_config(&args[1])?.payload),
+        Some("payload") if args.len() == 4 && args[2] == "--base64" => {
+            let bytes = base64::engine::general_purpose::STANDARD.decode(&args[3]).map_err(|e| e.to_string())?;
+            let settings = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+            management::set_payload(&args[1], settings)
+        },
         Some("unnamed") if args.len() == 2 => write_json("-", &management::unnamed(&args[1])?),
         Some("ignore") | Some("unignore") if args.len() == 4 && args[2] == "--name" => management::set_ignored(&args[1], &args[3], args[0] == "ignore"),
         Some("manage") if args.len() == 2 => { read_config(&args[1])?; management::launch(&args[1], false) },
@@ -703,6 +727,7 @@ mod tests {
             autolearn: true,
             notify: true,
             ignored_connections: vec![],
+            payload: Default::default(),
             profiles: vec![aw_watcher_vpn::Profile {
                 id: "draft-1".into(),
                 customer_hint: "draft".into(),
@@ -833,6 +858,13 @@ mod tests {
             requests
         });
         let mut aw = Adapter::new(port, "synthetic".into(), 5);
+        aw.payload = aw_watcher_vpn::PayloadSettings {
+            mode: aw_watcher_vpn::PayloadMode::Extended,
+            schema_version: true,
+            connection_names: true,
+            customers: true,
+            ..Default::default()
+        };
         let mut second = connection();
         second.id = "second".into();
         second.customers.clear();
@@ -1123,5 +1155,48 @@ mod tests {
             Context::new(vec![unknown]).title,
             "Activity (context unavailable)"
         );
+    }
+    #[test]
+    fn privacy_reload_discards_pending_samples_and_settings_roundtrip() {
+        let mut aw = Adapter::new(1, "synthetic".into(), 5);
+        aw.enqueue(Utc::now(), Context::new(vec![connection()]));
+        aw.set_payload(&aw_watcher_vpn::PayloadSettings {
+            customers: false,
+            ..Default::default()
+        });
+        assert!(aw.queue.is_empty());
+        let path = std::env::temp_dir().join(format!(
+            "vpn-payload-{}.json",
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let path = path.to_str().unwrap();
+        write_json(path, &draft()).unwrap();
+        let settings = aw.payload.clone();
+        management::set_payload(path, settings.clone()).unwrap();
+        let config = read_config(path).unwrap();
+        assert_eq!(config.payload, settings);
+        assert_eq!(
+            config.profiles[0].customer_hint,
+            draft().profiles[0].customer_hint
+        );
+        assert!(
+            serde_json::from_str::<aw_watcher_vpn::PayloadSettings>(r#"{"mode":"unknown"}"#)
+                .is_err()
+        );
+        assert!(
+            serde_json::from_str::<aw_watcher_vpn::PayloadSettings>(r#"{"secret":true}"#).is_err()
+        );
+        fs::remove_file(path).unwrap();
+        let prefix = std::path::Path::new(path)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        for entry in fs::read_dir(std::env::temp_dir()).unwrap().flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with(&format!("{prefix}.")) && name.ends_with(".bak") {
+                fs::remove_file(entry.path()).unwrap();
+            }
+        }
     }
 }

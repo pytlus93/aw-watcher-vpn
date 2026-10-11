@@ -40,6 +40,7 @@ fn config() -> Config {
         autolearn: true,
         notify: true,
         ignored_connections: vec![],
+        payload: Default::default(),
         profiles: vec![Profile {
             id: "customer-a".into(),
             customer_hint: "Synthetic A".into(),
