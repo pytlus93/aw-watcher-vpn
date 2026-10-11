@@ -49,6 +49,50 @@ mod windows {
             }
         }
     }
+    fn command(suspended: bool) -> Result<Command, String> {
+        let bootstrap = "[Console]::InputEncoding = New-Object Text.UTF8Encoding($false); $source=[Console]::In.ReadToEnd(); & ([ScriptBlock]::Create($source))";
+        let bytes: Vec<u8> = bootstrap
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        let exe = std::path::PathBuf::from(
+            std::env::var_os("SystemRoot").ok_or("SystemRoot unavailable")?,
+        )
+        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+        let mut command = Command::new(exe);
+        command
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-STA",
+                "-EncodedCommand",
+                &base64::engine::general_purpose::STANDARD.encode(bytes),
+            ])
+            .creation_flags(0x08000000 | if suspended { 4 } else { 0 })
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        Ok(command)
+    }
+    fn send_script(child: &mut std::process::Child, script: &str) -> Result<(), String> {
+        use std::io::Write;
+        let result = child
+            .stdin
+            .take()
+            .ok_or("Helper input unavailable")?
+            .write_all(script.as_bytes());
+        if let Err(error) = result {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error.to_string());
+        }
+        Ok(())
+    }
+    pub fn detached(script: &str) -> Result<(), String> {
+        let mut child = command(false)?.spawn().map_err(|e| e.to_string())?;
+        send_script(&mut child, script)
+    }
     fn spawn(script: &str) -> Result<(Job, std::process::Child), String> {
         let job = Job(unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) });
         if job.0.is_null() {
@@ -67,26 +111,7 @@ mod windows {
         {
             return Err("Cannot configure helper ownership".into());
         }
-        let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
-        let exe = std::path::PathBuf::from(
-            std::env::var_os("SystemRoot").ok_or("SystemRoot unavailable")?,
-        )
-        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-        let mut child = Command::new(exe)
-            .args([
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-STA",
-                "-EncodedCommand",
-                &base64::engine::general_purpose::STANDARD.encode(bytes),
-            ])
-            .creation_flags(0x08000004)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let mut child = command(true)?.spawn().map_err(|e| e.to_string())?;
         if unsafe { AssignProcessToJobObject(job.0, child.as_raw_handle()) } == 0
             || unsafe { NtResumeProcess(child.as_raw_handle()) } < 0
         {
@@ -94,6 +119,7 @@ mod windows {
             let _ = child.wait();
             return Err("Cannot attach or resume owned helper".into());
         }
+        send_script(&mut child, script)?;
         Ok((job, child))
     }
     pub fn run(script: &str) -> Result<(), String> {
@@ -108,6 +134,14 @@ mod windows {
     #[cfg(test)]
     mod tests {
         use super::*;
+        #[test]
+        fn long_ui_script_uses_stdin_instead_of_command_line() {
+            let script = format!(
+                "#{}\nif ('příliš' -ne [string]::Concat('pří','liš')) {{ exit 2 }}\nexit 0",
+                "x".repeat(40_000)
+            );
+            run(&script).unwrap();
+        }
         #[test]
         fn job_close_terminates_noninteractive_child() {
             let (job, mut child) = spawn("Start-Sleep -Seconds 30").unwrap();
@@ -127,8 +161,13 @@ mod windows {
     }
 }
 #[cfg(windows)]
-pub use windows::run;
+pub use windows::{detached, run};
 #[cfg(not(windows))]
 pub fn run(_script: &str) -> Result<(), String> {
     Err("Action UI requires Windows".into())
+}
+
+#[cfg(not(windows))]
+pub fn detached(script: &str) -> Result<(), String> {
+    run(script)
 }

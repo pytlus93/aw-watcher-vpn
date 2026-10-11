@@ -1,3 +1,12 @@
+# Configure crash regression — 2026-10-11, version 0.2.6
+
+Reproduced actual protocol-1 configuration launch against a synthetic config: the action exited 1 with Windows error 206, "The filename or extension is too long". The full embedded manager script exceeded the CreateProcess command-line limit after UTF-16 base64 encoding. Context probes and direct-script UI tests had bypassed this boundary.
+
+Fixed owned and legacy UI helper launch to use a short encoded bootstrap plus UTF-8 script input over stdin. Owned children still start suspended, enter a kill-on-close Windows job, resume and read their script; STA is preserved. Added a script exceeding 40K characters and configure-ui.ps1, an explicitly interactive synthetic harness that must only run with authorization.
+
+PASS: 39 Rust tests, Clippy, release packaging, module/actions checks. PASS actual UI execution: protocol context, synthetic explicit config, port 1 unavailable, producer lock held, child window shown and captured using PrintWindow, normal window close and action exit 0. Screenshot was visually inspected and remains under ignored local/configure-ui-*/configure.png. The existing synthetic naming/ignore UI harness also passed. No live settings were shown/edited and no production process was terminated or replaced. Actual installed-tray deployment is owned by the coordinating chat; real VPN/server/reboot limitations remain.
+
+---
 # Tray action validation — 2026-10-11, version 0.2.5
 
 PASS: 38 Rust tests, Clippy, release package, tests/module-actions.ps1 and tests/module-smoke.ps1. Action context/dispatch, server-unavailable resolution, held producer lock, manual compatibility, sidecar copy/rollback/restoration and native job-owned helper cleanup are isolated evidence. Transport regressions still verify actual loopback heartbeat resumption. See MODULE_ACTIONS.md for full action and lifecycle limitations. No installed tray clicks/dialogs, deployment, reboot or actual server combinations were exercised. No workflows added.

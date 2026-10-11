@@ -1,5 +1,11 @@
 # Releases
 
+## 0.2.6 — 2026-10-11
+
+- Fix configuration action failure caused by Windows command-line length limit (error 206). Pass embedded PowerShell UI scripts over UTF-8 stdin, leaving only a short bootstrap in the command line; retain STA and job-owned descendants.
+- Apply the same script transport to legacy manual management helpers. Add a >40K script regression and a synthetic actual configuration-window harness.
+- Validate the protocol-1 window opens with the producer lock held and server unavailable, visually inspect its capture, close normally and observe exit 0. 39 Rust tests, Clippy and local package/action/module checks pass. Live installation remains untouched.
+
 ## 0.2.5 — 2026-10-11
 
 - Implement aw-qt tray actions protocol 1: configuration/privacy UI, redacted diagnostics and About, dispatched before producer locking/collection.

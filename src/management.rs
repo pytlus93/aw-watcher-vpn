@@ -181,27 +181,7 @@ fn save_context_value(path: &str, context: Option<&Context>) -> Result<(), Strin
 
 #[cfg(windows)]
 fn spawn_script(script: &str) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
-    let exe =
-        std::path::PathBuf::from(std::env::var_os("SystemRoot").ok_or("SystemRoot unavailable")?)
-            .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-    Command::new(exe)
-        .args([
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-STA",
-            "-EncodedCommand",
-            &base64::engine::general_purpose::STANDARD.encode(bytes),
-        ])
-        .creation_flags(0x08000000)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    owned_helper::detached(script)
 }
 #[cfg(windows)]
 pub fn launch(path: &str, notification: bool) -> Result<(), String> {
