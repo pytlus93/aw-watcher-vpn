@@ -72,3 +72,7 @@ Collection remains local and passive; titles derive only from enabled customer/c
 - Verify tray start/stop, notification clicks, and management actions in the installed host. Prior synthetic module smoke checks cover packaging/config preservation and launcher lifetime; they are separate from real tray evidence.
 
 These real-host acceptance actions were not run during this validation. No live installation was updated and no intrusive interactive GUI harness was launched.
+
+## Installed 0.2.8 follow-up evidence (2026-10-12)
+
+Installed the tested executable and matching sidecar with existing settings preserved. The management inventory reports six assigned profile rows, including one visibly ignored row. Before/after counts for events preceding the earlier server startup were identical across this actual AW restart for every existing bucket. This validates retention for that restart, not reboot recovery or the user's specific timeline rendering. No database changed and no history contents exported. The timeline-view clarification remains pending.
