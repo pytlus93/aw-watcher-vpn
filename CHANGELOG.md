@@ -1,5 +1,11 @@
 # Releases
 
+## 0.2.9 — 2026-10-12
+
+- Add an explicit desktop-shell AW launcher that refuses tool-owned fallback and avoids duplicate running instances.
+- Correct deployment validation: tool-launched AW used a different physical SQLite file behind the same path. Preserve both histories; no automatic migration.
+- 40 Rust tests, Clippy and packaging pass. Desktop dispatch and already-running checks passed without restarting the normal installation.
+
 ## 0.2.8 — 2026-10-12
 
 - Keep all saved profiles, unnamed discoveries and ignored connections visible in the main Settings window. Show assignment and ignored state; restore ignored entries directly from the selected row.
@@ -76,3 +82,5 @@ is installed.
 Development harness: passive Windows network snapshots, customer learning,
 one AW bucket per computer, active connection events and an unnamed-connection
 management window. Empty connection sets produce no AW heartbeat.
+
+
