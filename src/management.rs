@@ -9,6 +9,8 @@ pub struct UnnamedConnection {
     suggested_name: Option<String>,
     existing_customers: Vec<String>,
     active: bool,
+    assigned: bool,
+    ignored: bool,
 }
 #[derive(serde::Serialize)]
 pub struct Unnamed {
@@ -83,6 +85,8 @@ pub fn unnamed(path: &str) -> Result<Unnamed, String> {
             suggested_name: d.suggested_name,
             existing_customers,
             active: active.is_some(),
+            assigned: false,
+            ignored: false,
         });
     }
     connections.sort_by(|a, b| {
@@ -106,6 +110,78 @@ pub fn unnamed(path: &str) -> Result<Unnamed, String> {
     })
 }
 
+pub fn connections(path: &str) -> Result<Unnamed, String> {
+    let mut result = unnamed(path)?;
+    let config = read_config(path)?;
+    let context: Option<Context> = fs::read_to_string(format!("{path}.context.json"))
+        .ok()
+        .map(|s| parse_json(&s))
+        .transpose()?
+        .flatten();
+    for p in &config.profiles {
+        let name = p
+            .rules
+            .adapter_names
+            .first()
+            .cloned()
+            .unwrap_or_else(|| p.customer_hint.clone());
+        let ignored = aw_watcher_vpn::connection_ignored(&config, &name);
+        let active = context.as_ref().is_some_and(|c| {
+            c.connections
+                .iter()
+                .any(|a| a.customers.contains(&p.customer_hint))
+        });
+        result.connections.push(UnnamedConnection {
+            id: format!("profile:{}", p.id),
+            name,
+            suggested_name: None,
+            existing_customers: vec![p.customer_hint.clone()],
+            active,
+            assigned: true,
+            ignored,
+        });
+    }
+    for name in &config.ignored_connections {
+        if result
+            .connections
+            .iter()
+            .any(|c| c.name.trim().eq_ignore_ascii_case(name.trim()))
+        {
+            continue;
+        }
+        result.connections.push(UnnamedConnection {
+            id: format!("ignored:{name}"),
+            name: name.clone(),
+            suggested_name: None,
+            existing_customers: vec![],
+            active: false,
+            assigned: false,
+            ignored: true,
+        });
+    }
+    result.connections.sort_by(|a, b| {
+        b.active
+            .cmp(&a.active)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    Ok(result)
+}
+pub fn rename_profile(path: &str, id: &str, name: &str) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Customer name cannot be empty".into());
+    }
+    let original = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let mut config: Config = parse_json(&original)?;
+    let profile = config
+        .profiles
+        .iter_mut()
+        .find(|p| p.id == id)
+        .ok_or("Unknown profile ID")?;
+    profile.customer_hint = name.into();
+    config.validate()?;
+    save_config(path, Some(&original), &config)
+}
 pub fn name_connection(path: &str, id: &str, name: &str, replace: bool) -> Result<(), String> {
     let discovered = read_discovered(&format!("{path}.discovered.json"))?;
     let d = discovered
@@ -297,6 +373,22 @@ mod tests {
         );
         assert!(name_connection(path, "synthetic", "Existing Customer", false).is_err());
         name_connection(path, "synthetic", "Existing Customer", true).unwrap();
+        let inventory = connections(path).unwrap();
+        assert!(inventory
+            .connections
+            .iter()
+            .any(|c| c.assigned && c.existing_customers == vec!["Existing Customer"]));
+        set_ignored(path, "VPN A", true).unwrap();
+        assert!(connections(path)
+            .unwrap()
+            .connections
+            .iter()
+            .any(|c| c.ignored && c.name == "VPN A"));
+        set_ignored(path, "VPN A", false).unwrap();
+        let saved_rules = read_config(path).unwrap().profiles[0].rules.clone();
+        rename_profile(path, &config.profiles[0].id, "Renamed Customer").unwrap();
+        assert_eq!(read_config(path).unwrap().profiles[0].rules, saved_rules);
+        rename_profile(path, &config.profiles[0].id, "Existing Customer").unwrap();
         let updated = read_config(path).unwrap();
         assert_eq!(updated.profiles.len(), 1);
         assert_eq!(updated.profiles[0].id, config.profiles[0].id);

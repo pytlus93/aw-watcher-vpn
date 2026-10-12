@@ -15,5 +15,5 @@ $notificationMessage = $false
 $managementTestOutput = Join-Path $testDir 'management.png'
 . (Join-Path $root 'scripts\manage.ps1')
 $config = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
-if ($config.profiles.Count -ne 1 -or $config.profiles[0].customer_hint -ne 'Synthetic Customer A') { throw 'Saved customer is incorrect' }
+if ($config.profiles.Count -ne 1 -or $config.profiles[0].customer_hint -ne 'Synthetic Customer Renamed') { throw 'Saved customer is incorrect' }
 "Rendered UI: $managementTestOutput"

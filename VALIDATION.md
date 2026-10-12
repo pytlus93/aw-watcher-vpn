@@ -1,3 +1,10 @@
+# Complete connection inventory — 2026-10-12, version 0.2.8
+
+PASS: 40 Rust tests, Clippy, release package, action/module checks. Expanded management regressions check named rows remain listed, ignored rows remain visible and profile rename preserves matching rules/identity. Actual synthetic UI tests exercise naming, rename, visible ignored state and direct restore through the main selected-row button. Screenshot under local/ui-test-*/management.png.ignored.png was visually inspected. Settings shows last cached activity rather than authenticated VPN health; event privacy projection is unchanged. Imported profiles without discovery records remain editable as profile rows. Old unnamed CLI filtering is retained.
+
+Separate persistence diagnosis: the deployed Rust server uses a disk-backed database with WAL. Read-only bucket API counts confirmed historical events preceding server startup, including window/AFK/VPN data. This disproves wholesale deletion in the current database; it does not validate the user's specific empty timeline view. No history contents were exported and no database modified. The view identification question remains pending.
+
+---
 # GlobalProtect detection regression — 2026-10-12, version 0.2.7
 
 A user-reported active connection was missed by 0.2.6 because its Windows description is PANGP Virtual Ethernet Adapter Secure, not GlobalProtect. Palo Alto documents old/new names in https://docs.paloaltonetworks.com/globalprotect/release-notes/6-0/changes-to-default-behavior . Detection now accepts the precise PANGP Virtual Ethernet Adapter marker (both variants), still requiring an up interface, usable non-link-local address and a local route. The ignore filter still precedes detection. No vendor client API or active network probes were added.

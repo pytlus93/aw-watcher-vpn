@@ -499,6 +499,8 @@ fn main_result() -> Result<(), String> {
             let settings = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
             management::set_payload(&args[1], settings)
         },
+        Some("connections") if args.len()==2 => write_json("-",&management::connections(&args[1])?),
+        Some("rename") if args.len()==5 && args[3]=="--name" => management::rename_profile(&args[1],&args[2],&args[4]),
         Some("unnamed") if args.len() == 2 => write_json("-", &management::unnamed(&args[1])?),
         Some("ignore") | Some("unignore") if args.len() == 4 && args[2] == "--name" => management::set_ignored(&args[1], &args[3], args[0] == "ignore"),
         Some("manage") if args.len() == 2 => { read_config(&args[1])?; management::launch(&args[1], false) },

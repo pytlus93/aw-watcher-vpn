@@ -19,7 +19,7 @@ public static class VpnManagerWindow {
  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr w);
 }
 '@
-    $window = [VpnManagerWindow]::FindWindow($null, "ActivityWatch - Unnamed VPN connections ($configPath)")
+    $window = [VpnManagerWindow]::FindWindow($null, "ActivityWatch - VPN connections ($configPath)")
     if ($window -ne [IntPtr]::Zero -and -not $notificationMessage) {
         [void][VpnManagerWindow]::ShowWindow($window, 5)
         [void][VpnManagerWindow]::SetForegroundWindow($window)
@@ -28,7 +28,7 @@ public static class VpnManagerWindow {
     exit
 }
 $form = New-Object Windows.Forms.Form
-$form.Text = "ActivityWatch - Unnamed VPN connections ($configPath)"
+$form.Text = "ActivityWatch - VPN connections ($configPath)"
 $form.Size = New-Object Drawing.Size(950, 510)
 $form.MinimumSize = New-Object Drawing.Size(680, 440)
 $form.StartPosition = 'CenterScreen'
@@ -45,7 +45,7 @@ foreach ($height in @(38, 0, 24, 32, 32, 40)) {
 }
 $form.Controls.Add($layout)
 $intro = New-Object Windows.Forms.Label
-$intro.Text = 'Select an unnamed connection, then enter a customer name or select an existing customer.'
+$intro.Text = 'All remembered connections and profiles. Select one to name, rename, ignore or restore it.'
 $intro.Dock = 'Fill'
 $layout.Controls.Add($intro, 0, 0)
 $list = New-Object Windows.Forms.ListView
@@ -56,7 +56,7 @@ $list.Dock = 'Fill'
 [void]$list.Columns.Add('Connection', 180)
 [void]$list.Columns.Add('Status', 100)
 [void]$list.Columns.Add('Suggested / previous customer', 310)
-[void]$list.Columns.Add('Connection ID', 300)
+[void]$list.Columns.Add('Connection / profile ID', 300)
 $layout.Controls.Add($list, 0, 1)
 $label = New-Object Windows.Forms.Label
 $label.Text = 'Customer name'
@@ -97,11 +97,11 @@ function Refresh-Connections {
     try {
         $script:refreshing = $true
         $selected = if ($list.SelectedItems.Count) { $list.SelectedItems[0].Tag.id } else { $null }
-        $output = & $watcherExe unnamed $configPath 2>&1
+        $output = & $watcherExe connections $configPath 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
         $data = ($output -join [Environment]::NewLine) | ConvertFrom-Json
         $script:ignoredConnections = @($data.ignored_connections)
-        $ids = @($data.connections | ForEach-Object id)
+        $ids = @($data.connections | Where-Object { -not $_.assigned -and -not $_.ignored } | ForEach-Object id)
         $script:notifyEnabled = $data.notify
         if ($notificationMessage -and $data.notify -and $script:loaded -and @($ids | Where-Object { $script:previousIds -notcontains $_ }).Count -gt 0) {
             $tray.ShowBalloonTip(10000, 'ActivityWatch VPN', 'New unnamed VPN connections detected. Click to name them.', [Windows.Forms.ToolTipIcon]::Info)
@@ -112,8 +112,8 @@ function Refresh-Connections {
         $list.Items.Clear()
         foreach ($connection in @($data.connections)) {
             $item = New-Object Windows.Forms.ListViewItem([string]$connection.name)
-            [void]$item.SubItems.Add($(if ($connection.active) { 'Last active' } else { 'Previously seen' }))
-            $suggestion = if ($connection.existing_customers.Count) { 'Existing suggestion: ' + ($connection.existing_customers -join ', ') } else { [string]$connection.suggested_name }
+            [void]$item.SubItems.Add($(if ($connection.ignored) { 'Ignored' } elseif ($connection.active) { 'Last active' } else { 'Previously seen' }))
+            $suggestion = if ($connection.existing_customers.Count) { $(if ($connection.assigned) {'Assigned: '} else {'Suggested: '}) + ($connection.existing_customers -join ', ') } else { [string]$connection.suggested_name }
             [void]$item.SubItems.Add($suggestion)
             [void]$item.SubItems.Add([string]$connection.id)
             $item.Tag = $connection
@@ -125,7 +125,7 @@ function Refresh-Connections {
         $name.Items.Clear()
         foreach ($customer in @($data.customers)) { [void]$name.Items.Add([string]$customer) }
         $name.Text = $text
-        $status.Text = "$($list.Items.Count) unnamed connection(s)"
+        $status.Text = "$($list.Items.Count) connection(s)"
     } catch { $status.Text = 'Refresh failed: ' + $_.Exception.Message }
     finally { $script:refreshing = $false }
 }
@@ -134,16 +134,18 @@ $list.Add_SelectedIndexChanged({
     if ($list.SelectedItems.Count -eq 0) { return }
     $connection = $list.SelectedItems[0].Tag
     $replace.Checked = $false
+    $ignore.Text = if ($connection.ignored) { 'Restore selected' } else { 'Ignore selected' }
     $name.Text = if ($connection.existing_customers.Count -eq 1) { [string]$connection.existing_customers[0] } else { [string]$connection.suggested_name }
 })
 $refresh.Add_Click({ Refresh-Connections })
 $ignore.Add_Click({
     if ($list.SelectedItems.Count -eq 0) { $status.Text = 'Select a connection to ignore.'; return }
     try {
-        $output = & $watcherExe ignore $configPath --name ([string]$list.SelectedItems[0].Tag.name) 2>&1
+        $command = if ($list.SelectedItems[0].Tag.ignored) { 'unignore' } else { 'ignore' }
+        $output = & $watcherExe $command $configPath --name ([string]$list.SelectedItems[0].Tag.name) 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
         Refresh-Connections
-        $status.Text = 'Ignored. Customer events and naming notifications exclude this VPN.'
+        $status.Text = if ($command -eq 'unignore') { 'Restored. The watcher will reload this connection.' } else { 'Ignored. Customer events and naming notifications exclude this VPN.' }
     } catch {
         if ($managementTestOutput) { throw }
         [void][Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Could not ignore VPN', 'OK', 'Error')
@@ -248,8 +250,11 @@ $payloadSettings.Add_Click({
 })
 $save.Add_Click({
     if ($list.SelectedItems.Count -eq 0 -or -not $name.Text.Trim()) { $status.Text = 'Select a connection and enter a name.'; return }
-    $arguments = @('name', $configPath, [string]$list.SelectedItems[0].Tag.id, '--name', $name.Text.Trim())
-    if ($replace.Checked) {
+    $row=$list.SelectedItems[0].Tag
+    if($row.assigned) { $arguments=@('rename',$configPath,([string]$row.id).Substring(8),'--name',$name.Text.Trim()) }
+    elseif($row.ignored) { $status.Text='Restore this connection before naming.'; return }
+    else { $arguments=@('name',$configPath,[string]$row.id,'--name',$name.Text.Trim()) }
+    if ($replace.Checked -and -not $row.assigned) {
         $answer = [Windows.Forms.MessageBox]::Show('Replace the selected customer fingerprint with this connection? Other customer profiles and history are preserved.', 'Update fingerprint', 'YesNo', 'Question')
         if ($answer -ne 'Yes') { return }
         $arguments += '--replace'
@@ -285,7 +290,7 @@ $form.Add_Shown({
     Refresh-Connections
     if ($notificationMessage) {
         $form.Hide()
-        if ($script:notifyEnabled) { $tray.ShowBalloonTip(10000, 'ActivityWatch VPN', 'Unnamed VPN connections detected. Click to name them.', [Windows.Forms.ToolTipIcon]::Info) }
+        if ($script:notifyEnabled) { $tray.ShowBalloonTip(10000, 'ActivityWatch VPN', 'VPN connections detected. Click to name them.', [Windows.Forms.ToolTipIcon]::Info) }
     }
 })
 try {
@@ -304,15 +309,25 @@ try {
         [Windows.Forms.Application]::DoEvents()
         $name.Text = 'Synthetic Customer A'
         $save.PerformClick()
-        if ($list.Items.Count -ne 1) { throw "Naming did not remove the resolved connection; $($status.Text)" }
-        $list.Items[0].Selected = $true
+        if ($list.Items.Count -ne 2 -or @($list.Items | Where-Object {$_.Tag.assigned}).Count -ne 1) { throw "Named connection disappeared; $($status.Text)" }
+        ($list.Items | Where-Object {$_.Tag.assigned}).Selected=$true
+        [Windows.Forms.Application]::DoEvents()
+        $name.Text='Synthetic Customer Renamed'
+        $save.PerformClick()
+        if (@($list.Items | Where-Object {$_.Tag.existing_customers -contains 'Synthetic Customer Renamed'}).Count -ne 1) { throw 'Assigned connection could not be renamed' }
+        ($list.Items | Where-Object {$_.Tag.name -eq 'Synthetic VPN B'}).Selected = $true
         [Windows.Forms.Application]::DoEvents()
         $ignore.PerformClick()
-        if ($list.Items.Count -ne 0) { throw 'Ignoring did not remove the pending connection' }
-        & $watcherExe unignore $configPath --name 'Synthetic VPN B' | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Restoring ignored VPN failed' }
+        if ($list.Items.Count -ne 2 -or @($list.Items | Where-Object {$_.Tag.ignored}).Count -ne 1) { throw 'Ignored status is not visible' }
+        $image=New-Object Drawing.Bitmap($form.Width,$form.Height)
+        $form.DrawToBitmap($image,(New-Object Drawing.Rectangle(0,0,$form.Width,$form.Height)))
+        $image.Save(($managementTestOutput+'.ignored.png'),[Drawing.Imaging.ImageFormat]::Png)
+        $image.Dispose()
+        ($list.Items | Where-Object {$_.Tag.ignored}).Selected = $true
+        [Windows.Forms.Application]::DoEvents()
+        $ignore.PerformClick()
         Refresh-Connections
-        if ($list.Items.Count -ne 1) { throw 'Restoring did not return the unnamed connection' }
+        if ($list.Items.Count -ne 2 -or @($list.Items | Where-Object {$_.Tag.ignored}).Count) { throw 'Restoring did not clear ignored status' }
         $ignoredSettings.PerformClick()
         'UI listing, naming, ignore and restore checks passed'
     } else { [Windows.Forms.Application]::Run($form) }

@@ -1,5 +1,11 @@
 # Releases
 
+## 0.2.8 — 2026-10-12
+
+- Keep all saved profiles, unnamed discoveries and ignored connections visible in the main Settings window. Show assignment and ignored state; restore ignored entries directly from the selected row.
+- Rename saved customer profiles without replacing matching rules, stable profile identity or historical events. Retain the legacy unnamed-only CLI command and add a separate full management inventory.
+- 40 Rust tests, Clippy, action/module checks and synthetic UI naming/rename/ignore/direct-restore tests pass. Captured ignored-row UI visually inspected. Separate read-only server checks confirm retained events from before its current startup; the user's empty timeline view still needs identification.
+
 ## 0.2.7 — 2026-10-12
 
 - Recognize GlobalProtect's documented PANGP Virtual Ethernet Adapter descriptions, including the Secure variant. Previously the generic driver check looked for GlobalProtect and missed these actual Windows names, so an unlearned active tunnel produced no event.

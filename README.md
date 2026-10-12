@@ -4,7 +4,7 @@ Windows network-context module managed by ActivityWatch. One shared collector ob
 adapters, assigned addresses, DNS configuration and routes across VPN vendors.
 Customer rules produce assignment hints; they do not assign cases or bill time.
 
-Release 0.2.7 uses a Rust core and a built-in Windows PowerShell/.NET
+Release 0.2.8 uses a Rust core and a built-in Windows PowerShell/.NET
 collector. It requires Windows 10/11 with Windows PowerShell 5.1 and the NetTCPIP
 module. It requests no elevation, installs no driver, modifies no networking,
 and sends no probes or DNS queries. Enterprise policy can restrict collection;
@@ -21,7 +21,7 @@ cargo build --release
 ```
 
 `scripts/build.ps1 -Test -Package` creates
-`dist/aw-watcher-vpn-0.2.7-windows-x64.zip` and its `.sha256` checksum.
+`dist/aw-watcher-vpn-0.2.8-windows-x64.zip` and its `.sha256` checksum.
 The ZIP contains an `aw-watcher-vpn` folder with the executable, installer,
 naming shortcut, synthetic config example, README and license.
 
@@ -290,7 +290,7 @@ mixed known/unknown connections, exclusions,
 named merging, replacement and Windows atomic
 backup handling. Clippy passes with warnings denied, and the release
 binary's embedded Windows PowerShell collector and synthetic-profile dry run
-pass. The ZIP is `dist/aw-watcher-vpn-0.2.7-windows-x64.zip`. Automated AW delivery
+pass. The ZIP is `dist/aw-watcher-vpn-0.2.8-windows-x64.zip`. Automated AW delivery
 tests use a real loopback mock HTTP server. No real VPN connect/disconnect cycle
 or actual ActivityWatch server session has been validated yet.
 The synthetic Windows Forms test `tests/management-ui.ps1` validates listing two
@@ -316,7 +316,7 @@ Validate standard-user capture, connect/disconnect, reconnect, sleep/resume,
 simultaneous tunnels, overlapping customer subnets, an AW outage/restart, and
 DNS/address changes. Generic tests use synthetic addresses only.
 
-See [VALIDATION.md](VALIDATION.md) for the 0.2.7 protocol review, deployed server schema evidence, restart/recovery regressions, and real-host acceptance checks.
+See [VALIDATION.md](VALIDATION.md) for the 0.2.8 protocol review, deployed server schema evidence, restart/recovery regressions, and real-host acceptance checks.
 
 ## Architecture and references
 
@@ -336,4 +336,6 @@ Inspected prior art: NetWatch (adapter/route heuristics), NetCatcher (interface
 polling), netdev (Rust IP Helper wrapper), and aw-watcher-netstatus (TCP probe).
 This implementation does not copy their source or perform their active probes.
 
-Protocol-one tray actions are implemented in 0.2.7. See [MODULE_ACTIONS.md](MODULE_ACTIONS.md) for commands, context, owned helpers, local checks and matching-sidecar install/rollback. Original tray compatibility is retained; upgraded installed-tray UI remains unverified.
+Protocol-one tray actions are implemented in 0.2.8. See [MODULE_ACTIONS.md](MODULE_ACTIONS.md) for commands, context, owned helpers, local checks and matching-sidecar install/rollback. Original tray compatibility is retained; upgraded installed-tray UI remains unverified.
+
+The Settings window now shows all saved profiles, pending discoveries and ignored connections. Named rows remain visible and can be renamed; ignored rows show Ignored and offer Restore selected. connections CONFIG lists this local management inventory; unnamed CONFIG retains its pending-only compatibility behavior. Rename preserves profile IDs/rules and does not rewrite AW history.

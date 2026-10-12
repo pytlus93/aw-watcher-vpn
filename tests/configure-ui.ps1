@@ -21,7 +21,7 @@ try {
         if($child){$window=Get-Process -Id $child.ProcessId; if($window.MainWindowHandle -ne [IntPtr]::Zero){break}}
         Start-Sleep -Milliseconds 200
     } while([DateTime]::UtcNow -lt $deadline)
-    if(-not $window -or $window.MainWindowHandle -eq [IntPtr]::Zero -or $window.MainWindowTitle -notlike 'ActivityWatch - Unnamed VPN connections*'){throw 'Expected configuration window was not displayed'}
+    if(-not $window -or $window.MainWindowHandle -eq [IntPtr]::Zero -or $window.MainWindowTitle -notlike 'ActivityWatch - VPN connections*'){throw 'Expected configuration window was not displayed'}
     Add-Type -AssemblyName System.Drawing
     Add-Type @"
 using System;
