@@ -2,9 +2,9 @@
 
 Version 0.2.5 packages UTF-8 `aw-watcher-vpn.exe.actions.json` alongside the matching executable. Enhanced aw-qt exposes **Modules → aw-watcher-vpn → Running** plus:
 
-- **Connections and privacy settings...** (`configure`): existing naming, ignore and payload UI. Uses local config and remembered discovery evidence; does not contact the server or start collection. Cached connection information is not a new authenticated VPN test.
-- **View redacted diagnostics...** (`open-logs`): displays up to 100 recent diagnostic categories from the profile's existing module log. Historical free text, identities and error detail are redacted; missing logs are reported honestly. No external text editor or unsupervised log helper is launched.
-- **About...** (`about`): module version, local-context limitations and configured server root. Explicitly says no connectivity test was performed.
+- **Settings…** (`configure`): existing naming, ignore and payload UI. Uses local config and remembered discovery evidence; does not contact the server or start collection. Cached connection information is not a new authenticated VPN test.
+- **Logs…** (`open-logs`): displays up to 100 recent diagnostic categories from the profile's existing module log. Historical free text, identities and error detail are redacted; missing logs are reported honestly. No external text editor or unsupervised log helper is launched.
+- **About…** (`about`): module version, local-context limitations and configured server root. Explicitly says no connectivity test was performed.
 
 No status probe, refresh, pause, deletion or cloud actions are advertised. No IPC is needed by these management actions. Running remains entirely host-owned. The original aw-qt ignores the sidecar and keeps its normal start/stop entry; aw-tauri does not currently implement this protocol.
 
@@ -36,3 +36,7 @@ Local Windows evidence on 2026-10-11: 38 Rust tests, Clippy warnings denied, rel
 No live watcher was stopped or replaced. No interactive action dialog was opened, real VPN data collected or production AW events written. Enhanced installed-tray clicks, duplicate-action host suppression, host exit with an open real dialog, actual window appearance, Python/Rust-server combinations and hard-restart login remain unvalidated. Cached management state is not live server/VPN health. This component does not modify aw-qt or shared root docs.
 
 0.2.6 fixes error 206 on actual configuration launch by sending UTF-8 scripts over stdin instead of an oversized encoded argument. With explicit UI-test authorization, run tests/configure-ui.ps1 for a real protocol helper/window test using synthetic settings; it opens, captures and closes only its own window. This path was tested and visually inspected on 2026-10-11, including exit 0 with producer lock held/server unavailable. Earlier context probes were insufficient. No live installation was changed.
+
+## Shared menu convention
+
+Use Running first (owned by AW), then Settings…, Status…, Logs…, About… in that order. Omit unsupported actions. Stable action IDs and existing command arguments stay unchanged. Module-specific details belong inside the dialogs rather than common menu labels. Logs are privacy-safe; Status must distinguish server reachability, producer state and delivery evidence.

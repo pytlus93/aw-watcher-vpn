@@ -2,8 +2,26 @@
   "schema_version": 1,
   "module": "aw-watcher-vpn",
   "actions": [
-    {"id": "configure", "label": "Connections and privacy settings...", "args": ["configure"]},
-    {"id": "logs", "label": "View redacted diagnostics...", "args": ["open-logs"]},
-    {"id": "about", "label": "About...", "args": ["about"]}
+    {
+      "id": "configure",
+      "label": "Settings…",
+      "args": [
+        "configure"
+      ]
+    },
+    {
+      "id": "logs",
+      "label": "Logs…",
+      "args": [
+        "open-logs"
+      ]
+    },
+    {
+      "id": "about",
+      "label": "About…",
+      "args": [
+        "about"
+      ]
+    }
   ]
 }
