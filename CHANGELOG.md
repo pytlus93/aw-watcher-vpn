@@ -1,5 +1,11 @@
 # Releases
 
+## 0.2.7 — 2026-10-12
+
+- Recognize GlobalProtect's documented PANGP Virtual Ethernet Adapter descriptions, including the Secure variant. Previously the generic driver check looked for GlobalProtect and missed these actual Windows names, so an unlearned active tunnel produced no event.
+- Add synthetic coverage for both names plus ignored, disconnected, link-local-only and unrouted adapters. Passive local snapshot replay now recognizes the user's previously missed connection without changing profiles or network settings.
+- 40 Rust tests, Clippy and release packaging pass. Live AW receipt after replacement remains to validate; customer assignment is still an explicit management operation.
+
 ## 0.2.6 — 2026-10-11
 
 - Fix configuration action failure caused by Windows command-line length limit (error 206). Pass embedded PowerShell UI scripts over UTF-8 stdin, leaving only a short bootstrap in the command line; retain STA and job-owned descendants.

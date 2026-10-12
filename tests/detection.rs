@@ -226,3 +226,29 @@ fn rejects_unsafe_or_empty_rules() {
     c.profiles[0].destinations = vec!["private.example".into()];
     assert!(c.validate().is_err());
 }
+#[test]
+fn globalprotect_pangp_names_are_detected_without_learning() {
+    let mut c = config();
+    c.profiles.clear();
+    for description in [
+        "PANGP Virtual Ethernet Adapter",
+        "PANGP Virtual Ethernet Adapter Secure",
+    ] {
+        let mut s = snapshot();
+        s.adapters[1].description = description.into();
+        let active = active_connections(&c, &s);
+        assert_eq!(active.len(), 1);
+        assert!(active[0].customers.is_empty());
+        c.ignored_connections = vec!["tunnel".into()];
+        assert!(active_connections(&c, &s).is_empty());
+        c.ignored_connections.clear();
+        s.adapters[1].up = false;
+        assert!(active_connections(&c, &s).is_empty());
+        s.adapters[1].up = true;
+        s.adapters[1].addresses = vec!["169.254.1.2".into()];
+        assert!(active_connections(&c, &s).is_empty());
+        s.adapters[1].addresses = vec!["198.51.100.5".into()];
+        s.routes.retain(|r| r.interface_index != 2);
+        assert!(active_connections(&c, &s).is_empty());
+    }
+}

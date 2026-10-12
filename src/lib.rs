@@ -362,6 +362,7 @@ pub fn active_connections(config: &Config, snapshot: &Snapshot) -> Vec<Connectio
                 "tunnel",
                 "anyconnect",
                 "globalprotect",
+                "pangp virtual ethernet adapter",
                 "fortinet",
                 "juniper",
                 "pulse secure",

@@ -1,3 +1,10 @@
+# GlobalProtect detection regression — 2026-10-12, version 0.2.7
+
+A user-reported active connection was missed by 0.2.6 because its Windows description is PANGP Virtual Ethernet Adapter Secure, not GlobalProtect. Palo Alto documents old/new names in https://docs.paloaltonetworks.com/globalprotect/release-notes/6-0/changes-to-default-behavior . Detection now accepts the precise PANGP Virtual Ethernet Adapter marker (both variants), still requiring an up interface, usable non-link-local address and a local route. The ignore filter still precedes detection. No vendor client API or active network probes were added.
+
+PASS: 40 Rust tests, Clippy warnings denied, release packaging. The new regression checks both driver names, unknown customer preservation, ignored/down/link-local/unrouted exclusion. Replaying the private passive snapshot from the user's connected machine changes evaluation from empty to nonempty. Private snapshot/profile details remain in ignored local files; no routes/IPs/customer names committed. This is real-host snapshot recognition evidence, not proof of authenticated/reachable access, transitions, or server heartbeat acceptance. Installed replacement and fresh AW receipt remain pending under the existing deployment ownership constraint.
+
+---
 # Configure crash regression — 2026-10-11, version 0.2.6
 
 Reproduced actual protocol-1 configuration launch against a synthetic config: the action exited 1 with Windows error 206, "The filename or extension is too long". The full embedded manager script exceeded the CreateProcess command-line limit after UTF-16 base64 encoding. Context probes and direct-script UI tests had bypassed this boundary.
