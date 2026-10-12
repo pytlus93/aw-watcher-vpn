@@ -76,3 +76,9 @@ These real-host acceptance actions were not run during this validation. No live 
 ## Installed 0.2.8 follow-up evidence (2026-10-12)
 
 Installed the tested executable and matching sidecar with existing settings preserved. The management inventory reports six assigned profile rows, including one visibly ignored row. Before/after counts for events preceding the earlier server startup were identical across this actual AW restart for every existing bucket. This validates retention for that restart, not reboot recovery or the user's specific timeline rendering. No database changed and no history contents exported. The timeline-view clarification remains pending.
+
+## Installed Activity/Timeline inspection (2026-10-12)
+
+After the user identified the Activity/Timeline page, inspected the installed v0.14.0 Rust server's web UI in a fresh in-app browser session. Timeline loaded 240 events over its selected 12-hour range and visibly rendered AFK, editor, call, VPN and window rows; the VPN row included both neutral and assigned customer title states. Activity showed today's nonzero activity and earlier days. Console inspection showed no errors. This adds actual installed GUI evidence for timeline rendering of vpn.context with title, separate from default dashboard customization or duration attribution. No live activity contents/screenshots were committed. No browser preferences, buckets or database were modified.
+
+The user's reported empty state after restart was not reproduced in this fresh session. Stale existing-browser state or a transient startup query failure remains a hypothesis, not a diagnosed source defect. Database/API retention and current page rendering passed; intermittent reload behavior still requires reproduction in the affected browser.
