@@ -96,3 +96,8 @@ The user's complementary screenshots were confirmed against the normal desktop s
 Added scripts/start-activitywatch.ps1 with no fallback, validated dispatch availability and duplicate prevention while leaving the existing normal instance untouched. A read-only comparison found 356 source records absent by bucket/start/context identity from the normal instance, plus no same-identity longer source intervals. These are recovery candidates, not proof that every interval is conflict-free. No private event contents were logged or committed, no DB overwritten and no history merged. Recovery must back up both stores, review overlap and use idempotent replay before any authorized merge.
 
 Normal-desktop Teams diagnostics show joined evidence becoming unknown during the reported media transitions, accounting for visible call gaps; toggling media alone is not a declared end. Historical logs lack the reason, so exact UI/collector cause remains unresolved. Teams diagnostics now distinguish collector_failure/controls_unavailable in a separately validated component change; no gap was silently filled.
+
+
+## Fresh validation — 2026-10-16
+
+Fresh scripts/build.ps1 -Test -Package -TargetDirectory target/updated PASS, followed by offline locked all-target Clippy with warnings denied. Forty Rust tests passed. tests/module-smoke.ps1 and tests/module-actions.ps1 passed using isolated synthetic installation/settings and owned child processes. Production AW contains positive-duration vpn.context events dated today with title-only data. Installed executable SHA256 differs from the fresh target/updated build; this alone does not identify a source-version difference. No VPN transitions, production restart, settings UI or reboot was exercised.
