@@ -185,3 +185,23 @@ No real before/after Buildplace renewal capture has yet established further stab
 provider identifiers. Older strict GUID profiles are retained until explicitly
 reviewed; adding a renewed connection does not silently weaken them. Historical
 AW events are never renamed or rewritten by configuration changes.
+
+## Delete an obsolete connection (0.2.11)
+
+Select the saved connection row and click **Delete connection**, then confirm.
+Only that profile and its associated cached discoveries are removed. Other profiles,
+ignore settings and historical AW events remain. The configuration and discovery
+files receive backups; the running module reloads the change on its next poll.
+Deleting the last connection removes that customer's future matching evidence.
+An active forgotten VPN can be discovered again as unnamed; use Ignore for lasting
+suppression. Delete is available for saved profiles; use Ignore for unnamed discoveries
+or Restore selected for ignored-only entries.
+
+```powershell
+.\aw-watcher-vpn.exe delete 'C:\path\to\config.json' '<profile-id>'
+```
+
+Use the profile ID from `connections` without its `profile:` UI prefix. Unknown IDs
+fail without changing configuration. If cached-discovery cleanup fails after the
+profile is removed, the command explicitly reports partial completion; its backups
+remain available. No AW history endpoint is called by deletion.

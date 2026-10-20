@@ -1,5 +1,10 @@
 # Releases
 
+## 0.2.11 — 2026-10-20
+
+- Add Delete connection for an individual saved profile, with confirmation and configuration/discovery backups. Preserve sibling connections, ignore settings and recorded history.
+- Remove associated cached discoveries; explain that an active forgotten VPN may be discovered again and Ignore suppresses it instead.
+
 ## 0.2.10 — 2026-10-20
 
 - Add independent VPN connection fingerprints to an existing customer by default; preserve old rules, IDs and history. Repeated assignment is idempotent.

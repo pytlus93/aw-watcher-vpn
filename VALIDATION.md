@@ -139,3 +139,13 @@ No server/database restart, history migration, live naming operation, interactiv
 settings validation or real Buildplace renewal was performed. Process recovery is
 observed installed-host evidence; it does not establish reboot recovery or live
 heartbeat acceptance.
+
+## 2026-10-20 — delete saved connection (0.2.11)
+
+43 Rust tests and Clippy with warnings denied pass (Rust 1.99.0). The deletion
+regression covers removing one fingerprint, retaining its customer sibling/rules
+and ignore configuration, cleaning associated discoveries, rejecting an unknown ID,
+removing the last profile, and creating backups. Deletion calls no AW endpoints.
+Settings source parses successfully; the interactive confirmation/button layout
+has not been visually validated. Synthetic module/action checks and local release
+packaging pass. No customer profile was deleted in the real installation.

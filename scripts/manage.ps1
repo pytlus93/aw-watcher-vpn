@@ -37,7 +37,7 @@ $layout = New-Object Windows.Forms.TableLayoutPanel
 $layout.Dock = 'Fill'
 $layout.ColumnCount = 1
 $layout.RowCount = 6
-foreach ($height in @(38, 0, 24, 32, 32, 40)) {
+foreach ($height in @(38, 0, 24, 32, 8, 80)) {
     $style = New-Object Windows.Forms.RowStyle
     if ($height -eq 0) { $style.SizeType = 'Percent'; $style.Height = 100 }
     else { $style.SizeType = 'Absolute'; $style.Height = $height }
@@ -45,7 +45,7 @@ foreach ($height in @(38, 0, 24, 32, 32, 40)) {
 }
 $form.Controls.Add($layout)
 $intro = New-Object Windows.Forms.Label
-$intro.Text = 'All remembered connections and profiles. Select one to name, rename, ignore or restore it.'
+$intro.Text = 'All remembered connections and profiles. Select one to name, rename, delete, ignore or restore it.'
 $intro.Dock = 'Fill'
 $layout.Controls.Add($intro, 0, 0)
 $list = New-Object Windows.Forms.ListView
@@ -86,7 +86,11 @@ $status.Padding = New-Object Windows.Forms.Padding(8)
 $payloadSettings = New-Object Windows.Forms.Button
 $payloadSettings.Text = 'Payload...'
 $payloadSettings.AutoSize = $true
-$buttons.Controls.AddRange(@($save, $ignore, $ignoredSettings, $payloadSettings, $refresh, $status))
+$delete = New-Object Windows.Forms.Button
+$delete.Text = 'Delete connection'
+$delete.AutoSize = $true
+$delete.Enabled = $false
+$buttons.Controls.AddRange(@($save, $delete, $ignore, $ignoredSettings, $payloadSettings, $refresh, $status))
 $layout.Controls.Add($buttons, 0, 5)
 
 function Refresh-Connections {
@@ -106,6 +110,7 @@ function Refresh-Connections {
         $script:loaded = $true
         $list.BeginUpdate()
         $list.Items.Clear()
+        $delete.Enabled = $false
         foreach ($connection in @($data.connections)) {
             $item = New-Object Windows.Forms.ListViewItem([string]$connection.name)
             [void]$item.SubItems.Add($(if ($connection.ignored) { 'Ignored' } elseif ($connection.active) { 'Last active' } else { 'Previously seen' }))
@@ -129,6 +134,7 @@ $list.Add_SelectedIndexChanged({
     if ($script:refreshing) { return }
     if ($list.SelectedItems.Count -eq 0) { return }
     $connection = $list.SelectedItems[0].Tag
+    $delete.Enabled = [bool]$connection.assigned
     $save.Text = if ($connection.assigned) { 'Rename customer' } else { 'Add connection' }
     $ignore.Text = if ($connection.ignored) { 'Restore selected' } else { 'Ignore selected' }
     $name.Text = if ($connection.existing_customers.Count -eq 1) { [string]$connection.existing_customers[0] } else { [string]$connection.suggested_name }
@@ -243,6 +249,22 @@ $payloadSettings.Add_Click({
         [void]$dialog.ShowDialog($form)
     } catch { [void][Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Could not open payload settings') }
     finally { $dialog.Dispose() }
+})
+$delete.Add_Click({
+    if ($list.SelectedItems.Count -eq 0) { return }
+    $row = $list.SelectedItems[0].Tag
+    if (-not $row.assigned) { return }
+    $message = "Delete saved connection '$($row.name)'? Other connections and recorded AW history remain. If this VPN is still active, it may be discovered again as unnamed. Use Ignore to suppress future detection."
+    if ([Windows.Forms.MessageBox]::Show($message, 'Delete connection', 'YesNo', 'Warning', 'Button2') -ne 'Yes') { return }
+    try {
+        $output = & $watcherExe delete $configPath ([string]$row.id).Substring(8) 2>&1
+        if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
+        Refresh-Connections
+        $status.Text = 'Deleted saved connection. Recorded history is preserved.'
+    } catch {
+        Refresh-Connections
+        [void][Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Could not complete deletion', 'OK', 'Error')
+    }
 })
 $save.Add_Click({
     if ($list.SelectedItems.Count -eq 0 -or -not $name.Text.Trim()) { $status.Text = 'Select a connection and enter a name.'; return }

@@ -175,6 +175,48 @@ pub fn connections(path: &str) -> Result<Unnamed, String> {
     });
     Ok(result)
 }
+/// Forget exactly one saved fingerprint; never delete customer siblings or AW events.
+pub fn delete_profile(path: &str, id: &str) -> Result<(), String> {
+    let original = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let mut config: Config = parse_json(&original)?;
+    config.validate()?;
+    let index = config
+        .profiles
+        .iter()
+        .position(|p| p.id == id)
+        .ok_or("Unknown profile ID; nothing deleted")?;
+    let removed = config.profiles.remove(index);
+    let discovery_path = format!("{path}.discovered.json");
+    let discovery_original = match fs::read_to_string(&discovery_path) {
+        Ok(s) => Some(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e.to_string()),
+    };
+    let mut discoveries = read_discovered(&discovery_path)?;
+    discoveries.retain(|d| {
+        let rules = naming_rules(d);
+        let belongs = rules == removed.rules
+            || removed
+                .rules
+                .adapter_ids
+                .iter()
+                .any(|id| id.eq_ignore_ascii_case(&d.id))
+            || removed
+                .rules
+                .adapter_names
+                .iter()
+                .any(|n| n.eq_ignore_ascii_case(&d.name));
+        !belongs || config.profiles.iter().any(|p| p.rules == rules)
+    });
+    config.validate()?;
+    save_config(path, Some(&original), &config)?;
+    if let Some(previous) = discovery_original {
+        save_config(&discovery_path, Some(&previous), &discoveries)
+            .map_err(|e| format!("Profile deleted, but discovery cleanup failed: {e}"))?;
+    }
+    Ok(())
+}
+
 pub fn rename_profile(path: &str, id: &str, name: &str) -> Result<(), String> {
     let name = name.trim();
     if name.is_empty() {
@@ -339,6 +381,59 @@ pub fn notify_only(_name: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn delete_one_fingerprint_preserves_customer_siblings_and_history() {
+        let dir = std::env::temp_dir().join(format!(
+            "aw-vpn-delete-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("config.json");
+        let path = path.to_str().unwrap();
+        let mut config = super::super::tests::draft();
+        let mut sibling = config.profiles[0].clone();
+        sibling.id = "bp".into();
+        sibling.rules = aw_watcher_vpn::Rules {
+            adapter_names: vec!["BP".into()],
+            ..Default::default()
+        };
+        config.profiles.push(sibling);
+        config.ignored_connections = vec!["Company".into()];
+        save_config(path, None, &config).unwrap();
+        let discovery = Discovered {
+            id: "old-guid".into(),
+            name: "BP".into(),
+            rules: config.profiles[1].rules.clone(),
+            suggested_name: None,
+        };
+        save_config(&format!("{path}.discovered.json"), None, &vec![discovery]).unwrap();
+        let history = dir.join("history-sentinel.json");
+        fs::write(&history, "historical events").unwrap();
+        delete_profile(path, "bp").unwrap();
+        let saved = read_config(path).unwrap();
+        assert_eq!(saved.profiles.len(), 1);
+        assert_eq!(saved.profiles[0].id, config.profiles[0].id);
+        assert_eq!(saved.profiles[0].rules, config.profiles[0].rules);
+        assert_eq!(saved.ignored_connections, config.ignored_connections);
+        assert!(read_discovered(&format!("{path}.discovered.json"))
+            .unwrap()
+            .is_empty());
+        assert_eq!(fs::read_to_string(&history).unwrap(), "historical events");
+        assert!(delete_profile(path, "missing").is_err());
+        assert_eq!(read_config(path).unwrap().profiles.len(), 1);
+        delete_profile(path, &config.profiles[0].id).unwrap();
+        assert!(read_config(path).unwrap().profiles.is_empty());
+        assert!(fs::read_dir(&dir).unwrap().any(|f| f
+            .unwrap()
+            .path()
+            .extension()
+            .is_some_and(|x| x == "bak")));
+        for file in fs::read_dir(&dir).unwrap() {
+            fs::remove_file(file.unwrap().path()).unwrap();
+        }
+        fs::remove_dir(dir).unwrap();
+    }
     #[test]
     fn management_lists_all_pending_and_reuses_existing_customer() {
         let dir = std::env::temp_dir().join(format!(
