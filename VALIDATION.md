@@ -149,3 +149,10 @@ removing the last profile, and creating backups. Deletion calls no AW endpoints.
 Settings source parses successfully; the interactive confirmation/button layout
 has not been visually validated. Synthetic module/action checks and local release
 packaging pass. No customer profile was deleted in the real installation.
+
+Installed 0.2.11 via the existing desktop shell, backing up the previous executable,
+sidecar and desktop configuration. Installed hash/version verified. AW recovered
+only the VPN module; its parent remains the same aw-qt process, server process IDs
+are unchanged and configuration SHA-256 is identical before/after installation.
+This confirms installed replacement/recovery, not visual UI, deletion of real
+profiles, live event acceptance or reboot behavior.
