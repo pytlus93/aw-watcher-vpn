@@ -1,5 +1,11 @@
 # Releases
 
+## 0.2.10 — 2026-10-20
+
+- Add independent VPN connection fingerprints to an existing customer by default; preserve old rules, IDs and history. Repeated assignment is idempotent.
+- Distinguish Add connection from Rename customer in Settings; rename all connections belonging to a customer together. Remove destructive replacement from the UI and reject ambiguous legacy CLI replacement.
+- Manual learning uses connection names instead of transient adapter GUIDs, retaining learned DNS/routes. Shared customer titles remain deduplicated.
+
 ## 0.2.9 â€” 2026-10-12
 
 - Add an explicit desktop-shell AW launcher that refuses tool-owned fallback and avoids duplicate running instances.

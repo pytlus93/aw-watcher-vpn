@@ -54,3 +54,10 @@ The version from `Cargo.toml` determines the ZIP name in `dist/`; a `.sha256` fi
 ## License
 
 [MIT](LICENSE).
+
+Customers can have multiple independent VPN connections (for example Network and
+Buildplace). Select an unnamed connection, choose an existing customer and click
+**Add connection**; existing fingerprints and history remain. Renaming an assigned
+customer renames all its connection profiles together. New manual fingerprints use
+connection names rather than transient adapter GUIDs; changed names or required
+network evidence still need review. See [configuration](docs/CONFIGURATION.md).

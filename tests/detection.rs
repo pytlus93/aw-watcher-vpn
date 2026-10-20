@@ -211,7 +211,8 @@ fn learning_produces_reviewable_draft() {
     before.routes.pop();
     let draft = learn(&before, &snapshot());
     assert_eq!(draft.profiles.len(), 1);
-    assert_eq!(draft.profiles[0].rules.adapter_ids, vec!["tunnel"]);
+    assert!(draft.profiles[0].rules.adapter_ids.is_empty());
+    assert_eq!(draft.profiles[0].rules.adapter_names, vec!["tunnel"]);
     draft.validate().unwrap();
 }
 #[test]
@@ -251,4 +252,42 @@ fn globalprotect_pangp_names_are_detected_without_learning() {
         s.routes.retain(|r| r.interface_index != 2);
         assert!(active_connections(&c, &s).is_empty());
     }
+}
+
+#[test]
+fn manually_learned_buildplace_survives_guid_renewal_and_both_connections_work() {
+    let mut after = snapshot();
+    after.adapters[1].name = "Customer-BP".into();
+    let mut before = after.clone();
+    before.adapters[1].up = false;
+    before.routes.retain(|r| r.interface_index != 2);
+    let mut learned = learn(&before, &after);
+    assert_eq!(learned.profiles.len(), 1);
+    assert!(learned.profiles[0].rules.adapter_ids.is_empty());
+    learned.profiles[0].customer_hint = "Customer".into();
+    after.adapters[1].id = "regenerated-guid".into();
+    assert_eq!(evaluate(&learned, Some(&after))[0].state, State::Present);
+    let mut network = learned.profiles[0].clone();
+    network.id = "network".into();
+    network.rules = Rules {
+        adapter_names: vec!["Customer-network".into()],
+        ..Default::default()
+    };
+    learned.profiles.push(network);
+    let mut private = adapter("private", 3, "198.51.100.8");
+    private.name = "Customer-network".into();
+    after.adapters.push(private);
+    after.routes.push(route(3, "192.0.2.0/24", 10));
+    assert!(evaluate(&learned, Some(&after))
+        .iter()
+        .all(|o| o.state == State::Present));
+    after.adapters[1].up = false;
+    let states = evaluate(&learned, Some(&after));
+    assert_eq!(states[0].state, State::Absent);
+    assert_eq!(states[1].state, State::Present);
+    after.adapters[1].up = true;
+    after.adapters[2].up = false;
+    let states = evaluate(&learned, Some(&after));
+    assert_eq!(states[0].state, State::Present);
+    assert_eq!(states[1].state, State::Absent);
 }

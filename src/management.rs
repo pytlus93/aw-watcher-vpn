@@ -127,9 +127,18 @@ pub fn connections(path: &str) -> Result<Unnamed, String> {
             .unwrap_or_else(|| p.customer_hint.clone());
         let ignored = aw_watcher_vpn::connection_ignored(&config, &name);
         let active = context.as_ref().is_some_and(|c| {
-            c.connections
-                .iter()
-                .any(|a| a.customers.contains(&p.customer_hint))
+            c.connections.iter().any(|a| {
+                a.customers.contains(&p.customer_hint)
+                    && (p
+                        .rules
+                        .adapter_names
+                        .iter()
+                        .any(|n| n.eq_ignore_ascii_case(&a.name))
+                        || p.rules
+                            .adapter_ids
+                            .iter()
+                            .any(|id| id.eq_ignore_ascii_case(&a.id)))
+            })
         });
         result.connections.push(UnnamedConnection {
             id: format!("profile:{}", p.id),
@@ -173,12 +182,22 @@ pub fn rename_profile(path: &str, id: &str, name: &str) -> Result<(), String> {
     }
     let original = fs::read_to_string(path).map_err(|e| e.to_string())?;
     let mut config: Config = parse_json(&original)?;
-    let profile = config
+    let previous = config
         .profiles
-        .iter_mut()
+        .iter()
         .find(|p| p.id == id)
-        .ok_or("Unknown profile ID")?;
-    profile.customer_hint = name.into();
+        .ok_or("Unknown profile ID")?
+        .customer_hint
+        .clone();
+    for profile in &mut config.profiles {
+        if profile
+            .customer_hint
+            .trim()
+            .eq_ignore_ascii_case(previous.trim())
+        {
+            profile.customer_hint = name.into();
+        }
+    }
     config.validate()?;
     save_config(path, Some(&original), &config)
 }
@@ -371,7 +390,22 @@ mod tests {
             pending.connections[0].existing_customers,
             vec!["Existing Customer"]
         );
-        assert!(name_connection(path, "synthetic", "Existing Customer", false).is_err());
+        name_connection(path, "synthetic", "Existing Customer", false).unwrap();
+        assert_eq!(read_config(path).unwrap().profiles.len(), 2);
+        assert_eq!(
+            read_config(path).unwrap().profiles[0].rules,
+            config.profiles[0].rules
+        );
+        // Explicit legacy replace refuses ambiguous customer-wide replacement.
+        assert!(name_connection(path, "synthetic", "Existing Customer", true).is_err());
+        rename_profile(path, &config.profiles[0].id, "Renamed group").unwrap();
+        assert!(read_config(path)
+            .unwrap()
+            .profiles
+            .iter()
+            .all(|p| p.customer_hint == "Renamed group"));
+        // Keep the remainder of the legacy management scenario single-profile.
+        save_config(path, Some(&fs::read_to_string(path).unwrap()), &config).unwrap();
         name_connection(path, "synthetic", "Existing Customer", true).unwrap();
         let inventory = connections(path).unwrap();
         assert!(inventory

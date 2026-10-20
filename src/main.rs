@@ -536,19 +536,28 @@ fn merge_profile(
         .filter(|(_, p)| p.customer_hint.trim().to_lowercase() == name.to_lowercase())
         .map(|(i, _)| i)
         .collect();
-    if existing.len() > 1 {
-        return Err("multiple existing profiles share this name; resolve them manually".into());
-    }
     if let Some(&i) = existing.first() {
-        if !replace {
-            return Err(format!(
-                "Customer {name:?} already exists; use --replace to relearn it"
-            ));
+        // A customer owns independent connection profiles. Never combine their
+        // rules: fields within a Rules fingerprint are conjunctive.
+        profile.customer_hint = config.profiles[i].customer_hint.clone();
+        if replace {
+            if existing.len() != 1 {
+                return Err("Customer has multiple connections; add the renewed connection without --replace (no config written)".into());
+            }
+            profile.id = config.profiles[i].id.clone();
+            profile.destinations = config.profiles[i].destinations.clone();
+            config.profiles[i] = profile;
+            config.validate()?;
+            return Ok(config);
         }
-        profile.id = config.profiles[i].id.clone();
-        profile.destinations = config.profiles[i].destinations.clone();
-        config.profiles[i] = profile;
-    } else {
+        if existing
+            .iter()
+            .any(|&i| config.profiles[i].rules == profile.rules)
+        {
+            return Ok(config); // Repeated assignment is idempotent.
+        }
+    }
+    {
         let slug: String = name
             .chars()
             .map(|c| {
@@ -757,11 +766,58 @@ mod tests {
         let config = merge_profile(config, draft(), "Customer B", false).unwrap();
         assert_eq!(config.profiles.len(), 2);
         assert_eq!(config.poll_seconds, 9);
-        assert!(merge_profile(config.clone(), draft(), " customer a ", false).is_err());
+        assert_eq!(
+            merge_profile(config.clone(), draft(), " customer a ", false)
+                .unwrap()
+                .profiles
+                .len(),
+            2
+        );
         let config = merge_profile(config, draft(), " CUSTOMER A ", true).unwrap();
         assert_eq!(config.profiles[0].id, "customer-a");
         assert_eq!(config.profiles[0].destinations, vec!["192.0.2.1"]);
         assert_eq!(config.profiles[1].customer_hint, "Customer B");
+    }
+    #[test]
+    fn customer_keeps_independent_network_and_buildplace_fingerprints() {
+        let mut config = draft();
+        config.profiles.clear();
+        let config = merge_profile(config, draft(), "Retia", false).unwrap();
+        let original = config.profiles[0].clone();
+        let mut bp = draft();
+        bp.profiles[0].rules = aw_watcher_vpn::Rules {
+            adapter_names: vec!["Retia-BP".into()],
+            ..Default::default()
+        };
+        let config = merge_profile(config, bp.clone(), " retia ", false).unwrap();
+        assert_eq!(config.profiles.len(), 2);
+        assert_eq!(config.profiles[0].id, original.id);
+        assert_eq!(config.profiles[0].rules, original.rules);
+        assert_ne!(config.profiles[0].id, config.profiles[1].id);
+        assert!(config.profiles.iter().all(|p| p.customer_hint == "Retia"));
+        assert_eq!(
+            merge_profile(config.clone(), bp.clone(), "Retia", false)
+                .unwrap()
+                .profiles
+                .len(),
+            2
+        );
+        assert!(merge_profile(config, bp, "Retia", true).is_err());
+        let context = Context::new(vec![
+            Connection {
+                id: "network".into(),
+                name: "Network".into(),
+                customers: vec!["Retia".into()],
+                suggested_name: None,
+            },
+            Connection {
+                id: "bp".into(),
+                name: "Retia-BP".into(),
+                customers: vec!["Retia".into()],
+                suggested_name: None,
+            },
+        ]);
+        assert_eq!(context.title, "Retia");
     }
     #[test]
     fn learning_rejects_ambiguity_and_generates_unique_ids() {
@@ -957,9 +1013,25 @@ mod tests {
         thread::spawn(move || {
             listener.set_nonblocking(true).unwrap();
             let mut requests = vec![];
+            // Keep bodyless 304 sockets open until all expected follow-up
+            // requests arrive: buffering advertised bytes would stall delivery.
+            let mut persistent_socket: Option<std::net::TcpStream> = None;
             for (status, body) in replies {
                 let deadline = Instant::now() + Duration::from_secs(5);
                 let mut socket = loop {
+                    if let Some(previous) = persistent_socket.as_ref() {
+                        let mut byte = [0];
+                        match previous.peek(&mut byte) {
+                            Ok(0) => {
+                                persistent_socket = None;
+                            }
+                            Ok(_) => break persistent_socket.take().unwrap(),
+                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                            Err(_) => {
+                                persistent_socket = None;
+                            }
+                        }
+                    }
                     match listener.accept() {
                         Ok((socket, _)) => break socket,
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -972,6 +1044,7 @@ mod tests {
                         Err(e) => panic!("{e}"),
                     }
                 };
+                socket.set_nonblocking(false).unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
                     .unwrap();
@@ -1004,7 +1077,13 @@ mod tests {
                 } else {
                     body.to_string()
                 };
-                write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                let length = if status == 304 { 67 } else { body.len() };
+                let connection = if status == 304 { "keep-alive" } else { "close" };
+                write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {length}\r\nConnection: {connection}\r\n\r\n{body}").unwrap();
+                if status == 304 {
+                    socket.set_nonblocking(true).unwrap();
+                    persistent_socket = Some(socket);
+                }
             }
             requests
         })

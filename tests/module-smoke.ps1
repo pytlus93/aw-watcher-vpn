@@ -103,7 +103,7 @@ try {
     [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\manage.ps1'), [ref]$tokens, [ref]$parseErrors)
     if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
     $version = & $installed --version
-    if ($LASTEXITCODE -ne 0 -or $version -ne 'aw-watcher-vpn 0.2.9') { throw 'Incorrect module version' }
+    if ($LASTEXITCODE -ne 0 -or $version -ne 'aw-watcher-vpn 0.2.10') { throw 'Incorrect module version' }
     $process = Start-Process -FilePath $installed -ArgumentList '--testing' -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testRoot 'testing-out.log') -RedirectStandardError (Join-Path $testRoot 'testing-err.log')
     Start-Sleep -Seconds 2
     if ($process.HasExited) { throw 'AW --testing launch exited' }

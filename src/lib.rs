@@ -425,7 +425,9 @@ pub fn learn(before: &Snapshot, after: &Snapshot) -> Config {
             continue;
         }
         let mut rules = Rules {
-            adapter_ids: vec![a.id.clone()],
+            // Adapter GUIDs change when a VPN configuration is regenerated.
+            // Keep the explicit connection name plus learned network evidence.
+            adapter_names: vec![a.name.clone()],
             ..Default::default()
         };
         // Only require DNS values that changed; always-on DNS is weak evidence.

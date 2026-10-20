@@ -101,3 +101,28 @@ Normal-desktop Teams diagnostics show joined evidence becoming unknown during th
 ## Fresh validation â€” 2026-10-16
 
 Fresh scripts/build.ps1 -Test -Package -TargetDirectory target/updated PASS, followed by offline locked all-target Clippy with warnings denied. Forty Rust tests passed. tests/module-smoke.ps1 and tests/module-actions.ps1 passed using isolated synthetic installation/settings and owned child processes. Production AW contains positive-duration vpn.context events dated today with title-only data. Installed executable SHA256 differs from the fresh target/updated build; this alone does not identify a source-version difference. No VPN transitions, production restart, settings UI or reboot was exercised.
+
+
+## 2026-10-20 — multiple connections per customer (0.2.10)
+
+42 Rust tests pass (23 adapter/management/transport, 19 detection), with Rust
+1.99.0; Clippy passes with warnings denied. Added regressions preserve the original
+network fingerprint when adding Buildplace, canonicalize the existing customer
+label, make repeated assignment idempotent, reject ambiguous legacy replacement,
+rename a customer group without changing rules/IDs, deduplicate the AW title,
+and verify either connection remains present independently. Manual learning
+survives a changed GUID using the same connection name and required network rules.
+
+Synthetic module-smoke and module-actions checks pass. PowerShell settings source
+parses without errors. No interactive UI validation, installed-host deployment,
+production configuration edits, real Buildplace renewal capture or reboot test
+was performed. Existing strict GUID profiles are not migrated automatically.
+
+The synthetic HTTP fixture now serves bodyless 304 responses with Content-Length:
+67 over open persistent connections. It handles both same-connection reuse and
+parallel requests, requiring subsequent metadata/heartbeat requests before it closes
+the connection. Existing-bucket producer restart and actual heartbeat delivery,
+metadata compatibility, heartbeat-304 rejection and outage/recovery tests pass.
+This is synthetic protocol evidence; the deployed server was not retested.
+Initial sandbox runs were blocked by socket/file-replacement permissions; validation
+passed outside tool isolation without touching live AW. Release ZIP built locally.

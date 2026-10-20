@@ -59,21 +59,17 @@ $list.Dock = 'Fill'
 [void]$list.Columns.Add('Connection / profile ID', 300)
 $layout.Controls.Add($list, 0, 1)
 $label = New-Object Windows.Forms.Label
-$label.Text = 'Customer name'
+$label.Text = 'Customer name (choose an existing customer to add this connection)'
 $label.Dock = 'Fill'
 $layout.Controls.Add($label, 0, 2)
 $name = New-Object Windows.Forms.ComboBox
 $name.Dock = 'Fill'
 $name.DropDownStyle = 'DropDown'
 $layout.Controls.Add($name, 0, 3)
-$replace = New-Object Windows.Forms.CheckBox
-$replace.Text = 'Update an existing customer fingerprint (preserves its ID and history)'
-$replace.Dock = 'Fill'
-$layout.Controls.Add($replace, 0, 4)
 $buttons = New-Object Windows.Forms.FlowLayoutPanel
 $buttons.Dock = 'Fill'
 $save = New-Object Windows.Forms.Button
-$save.Text = 'Save name'
+$save.Text = 'Save / add to customer'
 $save.AutoSize = $true
 $refresh = New-Object Windows.Forms.Button
 $refresh.Text = 'Refresh'
@@ -133,7 +129,7 @@ $list.Add_SelectedIndexChanged({
     if ($script:refreshing) { return }
     if ($list.SelectedItems.Count -eq 0) { return }
     $connection = $list.SelectedItems[0].Tag
-    $replace.Checked = $false
+    $save.Text = if ($connection.assigned) { 'Rename customer' } else { 'Add connection' }
     $ignore.Text = if ($connection.ignored) { 'Restore selected' } else { 'Ignore selected' }
     $name.Text = if ($connection.existing_customers.Count -eq 1) { [string]$connection.existing_customers[0] } else { [string]$connection.suggested_name }
 })
@@ -254,16 +250,11 @@ $save.Add_Click({
     if($row.assigned) { $arguments=@('rename',$configPath,([string]$row.id).Substring(8),'--name',$name.Text.Trim()) }
     elseif($row.ignored) { $status.Text='Restore this connection before naming.'; return }
     else { $arguments=@('name',$configPath,[string]$row.id,'--name',$name.Text.Trim()) }
-    if ($replace.Checked -and -not $row.assigned) {
-        $answer = [Windows.Forms.MessageBox]::Show('Replace the selected customer fingerprint with this connection? Other customer profiles and history are preserved.', 'Update fingerprint', 'YesNo', 'Question')
-        if ($answer -ne 'Yes') { return }
-        $arguments += '--replace'
-    }
     try {
         $output = & $watcherExe @arguments 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
         Refresh-Connections
-        $status.Text = 'Saved. The watcher will reload the customer name.'
+        $status.Text = 'Saved. Existing customer connections and history are preserved.'
     } catch {
         if ($managementTestOutput) { throw }
         [void][Windows.Forms.MessageBox]::Show(($_.Exception.Message), 'Could not save name', 'OK', 'Error')

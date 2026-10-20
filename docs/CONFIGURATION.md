@@ -18,14 +18,16 @@ in memory. Auto-learning also writes a local discovery file, as described below.
 Repeat with another before/after pair and `--name "Customer B"`, using the same
 `local\config.json`. Learning automatically appends the customer and generates
 an internal profile ID; no separate alias is needed. Names are compared without
-case or surrounding spaces. Existing customers require `--replace` to relearn:
+case or surrounding spaces. Reusing a customer adds an independent connection fingerprint:
 
 ```powershell
-.\target\release\aw-watcher-vpn.exe learn local\before-new.json local\after-new.json local\config.json --name "Customer A" --replace
+.\target\release\aw-watcher-vpn.exe learn local\before-new.json local\after-new.json local\config.json --name "Customer A"
 ```
 
-Replacement preserves the profile ID and configured destinations. Other profiles
-and polling settings are retained. Updates replace the file atomically on Windows
+Existing profile IDs, rules, destinations and polling settings are retained. Identical
+assignments are idempotent. Legacy CLI `--replace` is available only when the customer
+has exactly one connection; it preserves that profile ID and destinations, but
+replaces its rules. It refuses ambiguous replacement of a multi-connection customer. Updates replace the file atomically on Windows
 and save its previous contents beside it as `config.json.<unique-value>.bak`.
 If the file changed since it was read, learning refuses to overwrite it.
 Zero or multiple changed adapters are rejected without changing the config.
@@ -36,8 +38,8 @@ Review `config.json`: remove unrelated Wi-Fi/VM changes and select stable rules.
 A learned profile may match a physical interface;
 learning is a change comparison, not automatic proof of a VPN. Captures must be
 from the same machine with only the intended connection changed. Repeat the
-cycle to find stable prefixes/DNS values. Dynamically recreated adapters may
-need a description rule instead of an adapter ID. Routes containing a temporary
+cycle to find stable prefixes/DNS values. New manual learning uses the connection
+name instead of a transient adapter GUID, plus the selected DNS/route evidence. Routes containing a temporary
 assigned IP should be removed/replaced with a stable customer subnet.
 
 Rules within each category behave as follows:
@@ -127,9 +129,11 @@ You can also open it while the watcher runs:
 .\aw-watcher-vpn.exe manage local\config.json
 ```
 
-Existing customer names are offered in the dropdown. Reusing an existing name
-requires selecting "Update an existing customer fingerprint" and confirming
-replacement. This preserves the profile ID, history and destinations. Possible
+Existing customer names are offered in the dropdown. Select the new connection,
+choose its customer and use **Add connection**. Network and Buildplace connections
+keep independent fingerprints with the same canonical customer label. Selecting
+an assigned row exposes **Rename customer**, which renames all that customer
+connections together while preserving their IDs and rules. Possible
 matches based on an adapter ID/name or customer-name resemblance are suggestions,
 not automatic reassignment. A changed GUID or overly restrictive old fingerprint
 can otherwise make an already learned connection appear unnamed.
@@ -140,7 +144,7 @@ The CLI remains available:
 .\aw-watcher-vpn.exe name local\config.json "<connection-id>" --name "Customer A"
 ```
 
-Add `--replace` to update an existing customer using the naming command.
+Omit `--replace` to add this connection to an existing customer without removing others.
 This promotes the stored connection name into the main config, with a backup.
 The running watcher reloads customer rules each poll. Review this connection-name rule
 for clients that reuse one connection name for different customers; refine it with stable
@@ -163,3 +167,21 @@ Disable either feature independently:
 Detection and AW recording continue with either option. With auto-learning off,
 no new discoveries are saved; before/after learning is still available. Dry runs
 never save discoveries or display desktop notifications.
+
+## Buildplace renewal and customer grouping (0.2.10)
+
+Multiple profiles can carry one customer label in the existing schema; no config
+migration or separate customer-alias field is needed. Each profile has its own
+stable ID and independent rules. Both connections active produce one customer
+in the alphabetical, deduplicated AW title; either connection alone still supplies
+that customer. Ignore remains per connection name, not customer-wide.
+
+A regenerated Buildplace adapter can change GUID and interface index without
+invalidating a name-based profile. If its name or required DNS/routes also change,
+review the newly discovered connection and add it to the same customer. Old
+fingerprints remain available. We do not guess an automatic reassignment from
+shared Buildplace infrastructure, generic driver descriptions or similar subnets.
+No real before/after Buildplace renewal capture has yet established further stable
+provider identifiers. Older strict GUID profiles are retained until explicitly
+reviewed; adding a renewed connection does not silently weaken them. Historical
+AW events are never renamed or rewritten by configuration changes.
