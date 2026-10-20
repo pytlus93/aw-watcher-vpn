@@ -1,5 +1,9 @@
 # Releases
 
+## 0.2.12 — 2026-10-20
+
+- Enable Delete connection for unnamed discoveries. Remove only the selected cached entry with a backup; preserve customer assignments, other discoveries and ignore settings.
+
 ## 0.2.11 — 2026-10-20
 
 - Add Delete connection for an individual saved profile, with confirmation and configuration/discovery backups. Preserve sibling connections, ignore settings and recorded history.

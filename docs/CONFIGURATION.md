@@ -194,8 +194,9 @@ ignore settings and historical AW events remain. The configuration and discovery
 files receive backups; the running module reloads the change on its next poll.
 Deleting the last connection removes that customer's future matching evidence.
 An active forgotten VPN can be discovered again as unnamed; use Ignore for lasting
-suppression. Delete is available for saved profiles; use Ignore for unnamed discoveries
-or Restore selected for ignored-only entries.
+suppression. Delete is available for saved profiles and unnamed discoveries. Deleting an unnamed
+discovery removes only its cached entry, preserving customer profiles and ignores.
+Use Restore selected for ignored-only entries.
 
 ```powershell
 .\aw-watcher-vpn.exe delete 'C:\path\to\config.json' '<profile-id>'
@@ -205,3 +206,12 @@ Use the profile ID from `connections` without its `profile:` UI prefix. Unknown 
 fail without changing configuration. If cached-discovery cleanup fails after the
 profile is removed, the command explicitly reports partial completion; its backups
 remain available. No AW history endpoint is called by deletion.
+
+For an unnamed discovery, the CLI equivalent is:
+
+```powershell
+.\aw-watcher-vpn.exe delete-discovery 'C:\path\to\config.json' '<discovery-id>'
+```
+
+Deletion forgets the cached discovery; it does not suppress an active VPN from
+being discovered again. Use Ignore for that behavior.

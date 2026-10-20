@@ -500,6 +500,7 @@ fn main_result() -> Result<(), String> {
             management::set_payload(&args[1], settings)
         },
         Some("connections") if args.len()==2 => write_json("-",&management::connections(&args[1])?),
+        Some("delete-discovery") if args.len()==3 => management::delete_discovery(&args[1], &args[2]),
         Some("delete") if args.len()==3 => management::delete_profile(&args[1], &args[2]),
         Some("rename") if args.len()==5 && args[3]=="--name" => management::rename_profile(&args[1],&args[2],&args[4]),
         Some("unnamed") if args.len() == 2 => write_json("-", &management::unnamed(&args[1])?),

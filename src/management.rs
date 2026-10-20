@@ -175,6 +175,20 @@ pub fn connections(path: &str) -> Result<Unnamed, String> {
     });
     Ok(result)
 }
+/// Forget one cached discovery without changing customer assignments or ignores.
+pub fn delete_discovery(path: &str, id: &str) -> Result<(), String> {
+    read_config(path)?.validate()?;
+    let discovery_path = format!("{path}.discovered.json");
+    let original = fs::read_to_string(&discovery_path).map_err(|e| e.to_string())?;
+    let mut discoveries: Vec<Discovered> = parse_json(&original)?;
+    let index = discoveries
+        .iter()
+        .position(|d| d.id == id)
+        .ok_or("Unknown discovery ID; nothing deleted")?;
+    discoveries.remove(index);
+    save_config(&discovery_path, Some(&original), &discoveries)
+}
+
 /// Forget exactly one saved fingerprint; never delete customer siblings or AW events.
 pub fn delete_profile(path: &str, id: &str) -> Result<(), String> {
     let original = fs::read_to_string(path).map_err(|e| e.to_string())?;
@@ -381,6 +395,44 @@ pub fn notify_only(_name: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn deleting_unnamed_discovery_keeps_config_and_other_discoveries() {
+        let dir = std::env::temp_dir().join(format!(
+            "aw-vpn-forget-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("config.json");
+        let path = path.to_str().unwrap();
+        save_config(path, None, &super::super::tests::draft()).unwrap();
+        let config_before = fs::read(path).unwrap();
+        let make = |id: &str| Discovered {
+            id: id.into(),
+            name: id.into(),
+            rules: Default::default(),
+            suggested_name: None,
+        };
+        let discovery_path = format!("{path}.discovered.json");
+        save_config(&discovery_path, None, &vec![make("old"), make("other")]).unwrap();
+        delete_discovery(path, "old").unwrap();
+        assert_eq!(fs::read(path).unwrap(), config_before);
+        let remaining = read_discovered(&discovery_path).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, "other");
+        let before = fs::read(&discovery_path).unwrap();
+        assert!(delete_discovery(path, "missing").is_err());
+        assert_eq!(fs::read(&discovery_path).unwrap(), before);
+        assert!(fs::read_dir(&dir).unwrap().any(|f| f
+            .unwrap()
+            .path()
+            .extension()
+            .is_some_and(|x| x == "bak")));
+        for file in fs::read_dir(&dir).unwrap() {
+            fs::remove_file(file.unwrap().path()).unwrap();
+        }
+        fs::remove_dir(dir).unwrap();
+    }
     #[test]
     fn delete_one_fingerprint_preserves_customer_siblings_and_history() {
         let dir = std::env::temp_dir().join(format!(

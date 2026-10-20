@@ -156,3 +156,14 @@ only the VPN module; its parent remains the same aw-qt process, server process I
 are unchanged and configuration SHA-256 is identical before/after installation.
 This confirms installed replacement/recovery, not visual UI, deletion of real
 profiles, live event acceptance or reboot behavior.
+
+## 2026-10-20 — unnamed deletion correction (0.2.12)
+
+Delete connection now accepts unnamed discoveries as well as saved profiles.
+The separate delete-discovery command removes exactly one cached discovery using
+atomic stale-write checks and a backup. Regression verifies the main config remains
+byte-for-byte unchanged, other discoveries remain, and unknown IDs change nothing.
+44 Rust tests, Clippy, local packaging and synthetic module/action checks pass.
+PowerShell settings source parses; no interactive visual test or real discovery
+deletion was performed. An active forgotten VPN can be discovered again; Ignore
+remains the separate suppression action. No event fields or transport code changed.

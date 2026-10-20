@@ -134,7 +134,7 @@ $list.Add_SelectedIndexChanged({
     if ($script:refreshing) { return }
     if ($list.SelectedItems.Count -eq 0) { return }
     $connection = $list.SelectedItems[0].Tag
-    $delete.Enabled = [bool]$connection.assigned
+    $delete.Enabled = [bool]$connection.assigned -or -not [bool]$connection.ignored
     $save.Text = if ($connection.assigned) { 'Rename customer' } else { 'Add connection' }
     $ignore.Text = if ($connection.ignored) { 'Restore selected' } else { 'Ignore selected' }
     $name.Text = if ($connection.existing_customers.Count -eq 1) { [string]$connection.existing_customers[0] } else { [string]$connection.suggested_name }
@@ -253,14 +253,16 @@ $payloadSettings.Add_Click({
 $delete.Add_Click({
     if ($list.SelectedItems.Count -eq 0) { return }
     $row = $list.SelectedItems[0].Tag
-    if (-not $row.assigned) { return }
-    $message = "Delete saved connection '$($row.name)'? Other connections and recorded AW history remain. If this VPN is still active, it may be discovered again as unnamed. Use Ignore to suppress future detection."
+    if ($row.ignored -and -not $row.assigned) { return }
+    $message = "Delete remembered connection '$($row.name)'? Other connections and recorded AW history remain. If this VPN is still active, it may be discovered again as unnamed. Use Ignore to suppress future detection."
     if ([Windows.Forms.MessageBox]::Show($message, 'Delete connection', 'YesNo', 'Warning', 'Button2') -ne 'Yes') { return }
     try {
-        $output = & $watcherExe delete $configPath ([string]$row.id).Substring(8) 2>&1
+        if ($row.assigned) { $arguments = @('delete', $configPath, ([string]$row.id).Substring(8)) }
+        else { $arguments = @('delete-discovery', $configPath, [string]$row.id) }
+        $output = & $watcherExe @arguments 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
         Refresh-Connections
-        $status.Text = 'Deleted saved connection. Recorded history is preserved.'
+        $status.Text = 'Deleted remembered connection. Recorded history is preserved.'
     } catch {
         Refresh-Connections
         [void][Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Could not complete deletion', 'OK', 'Error')
