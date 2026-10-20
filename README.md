@@ -65,4 +65,3 @@ network evidence still need review. See [configuration](docs/CONFIGURATION.md).
 Use **Delete connection** on a saved profile or unnamed discovery to forget that connection fingerprint.
 Deletion preserves other connections for the customer and all recorded AW events.
 An active forgotten VPN can be discovered again; use Ignore instead to suppress it.
-

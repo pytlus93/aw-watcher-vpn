@@ -167,3 +167,9 @@ byte-for-byte unchanged, other discoveries remain, and unknown IDs change nothin
 PowerShell settings source parses; no interactive visual test or real discovery
 deletion was performed. An active forgotten VPN can be discovered again; Ignore
 remains the separate suppression action. No event fields or transport code changed.
+
+0.2.12 deployed through the existing desktop shell: installed hash/version match,
+AW recovered only the VPN module under the same tray parent, server process IDs
+stayed unchanged, and the desktop configuration hash is unchanged. Previous files
+and configuration are backed up privately. No real entry was deleted during deployment.
+Interactive UI and reboot behavior remain unverified.
