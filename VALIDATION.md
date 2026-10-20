@@ -126,3 +126,16 @@ metadata compatibility, heartbeat-304 rejection and outage/recovery tests pass.
 This is synthetic protocol evidence; the deployed server was not retested.
 Initial sandbox runs were blocked by socket/file-replacement permissions; validation
 passed outside tool isolation without touching live AW. Release ZIP built locally.
+
+### Installed deployment — 2026-10-20
+
+Deployed 0.2.10 through the existing Windows desktop shell dispatch. Backed up
+the previous executable, action sidecar and real desktop configuration under ignored
+local/desktop-probe. Installed executable hash matches the validated release binary;
+its desktop --version reports 0.2.10. AW restarted only the VPN module after replacement
+and retained ownership of the new process. AW tray and server process IDs stayed
+unchanged, and the configuration SHA-256 before/after deployment is identical.
+No server/database restart, history migration, live naming operation, interactive
+settings validation or real Buildplace renewal was performed. Process recovery is
+observed installed-host evidence; it does not establish reboot recovery or live
+heartbeat acceptance.
