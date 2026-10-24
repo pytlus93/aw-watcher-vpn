@@ -105,6 +105,7 @@ pub fn record(message: &str) {
 struct Options {
     config: Option<PathBuf>,
     testing: bool,
+    port: Option<u16>,
     once: bool,
     dry_run: bool,
     init: bool,
@@ -124,6 +125,10 @@ impl Options {
                     o.config = Some(PathBuf::from(&args[i]));
                 }
                 "--testing" => o.testing = true,
+                "--port" if i + 1 < args.len() => {
+                    i += 1;
+                    o.port = Some(actions::parse_port(&args[i])?);
+                }
                 "--once" => o.once = true,
                 "--dry-run" => o.dry_run = true,
                 "--init-config" => o.init = true,
@@ -156,7 +161,7 @@ pub fn log_path(path: &Path, testing: bool, custom: bool) -> Result<PathBuf, Str
 }
 pub fn launch(args: &[String]) -> Result<(), String> {
     if args == ["--help"] {
-        println!("aw-watcher-vpn [--config PATH] [--testing] [--once] [--dry-run] [--no-autolearn] [--no-notify]\nNo arguments: run as an ActivityWatch module.\n--init-config: initialize config without overwriting and print its path.\n--config-path: print config path without writing.\n--validate-config: validate settings without collection or AW requests.\nconfigure / open-logs / about [--config PATH] [--testing]: tray actions with manual fallback.\nmanage [CONFIG]: open unnamed connections.\nLegacy snapshot/evaluate/learn/name/run commands remain available.");
+        println!("aw-watcher-vpn [--config PATH] [--testing] [--port PORT] [--once] [--dry-run] [--no-autolearn] [--no-notify]\nNo arguments: run as an ActivityWatch module.\n--init-config: initialize config without overwriting and print its path.\n--config-path: print config path without writing.\n--validate-config: validate settings without collection or AW requests.\nconfigure / open-logs / about [--config PATH] [--testing] [--port PORT]: tray actions with manual fallback.\nmanage [CONFIG]: open unnamed connections.\nLegacy snapshot/evaluate/learn/name/run commands remain available.");
         return Ok(());
     }
     if args == ["--version"] {
@@ -202,6 +207,7 @@ pub fn launch(args: &[String]) -> Result<(), String> {
             o.dry_run,
             !o.no_autolearn,
             !o.no_notify,
+            o.port,
         ) {
             Ok(()) => return Ok(()),
             Err(e) if o.once || o.dry_run || e == "watcher already running for this config" => {
@@ -222,6 +228,14 @@ mod tests {
     use super::*;
     #[test]
     fn module_options_and_profile_paths_are_isolated() {
+        assert_eq!(
+            Options::parse(&["--port".into(), "7123".into()])
+                .unwrap()
+                .port,
+            Some(7123)
+        );
+        assert!(Options::parse(&["--port".into()]).is_err());
+        assert!(Options::parse(&["--port".into(), "0".into()]).is_err());
         let args = vec![
             "--testing".into(),
             "--no-notify".into(),

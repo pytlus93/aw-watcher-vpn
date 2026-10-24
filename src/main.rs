@@ -309,6 +309,7 @@ fn run(
     dry_run: bool,
     autolearn: bool,
     notify: bool,
+    port: Option<u16>,
 ) -> Result<(), String> {
     let mut config = read_config(config_path)?;
     let _instance = host::instance_lock(config_path)?;
@@ -326,7 +327,7 @@ fn run(
         })
         .collect();
     let mut aw = Adapter::new(if testing { 5666 } else { 5600 }, host, config.poll_seconds);
-    aw.base = format!("{}/api/0", actions::server_url(actions::testing(testing)?)?);
+    aw.base = format!("{}/api/0", actions::server_url(actions::testing(testing)?, port)?);
     let mut previous: Option<Context> = None;
     loop {
         let start = Instant::now();
@@ -509,7 +510,7 @@ fn main_result() -> Result<(), String> {
         Some("manage") if args.len() == 1 => { let path = host::default_config(false)?; host::init_config(&path)?; management::launch(path.to_str().ok_or("invalid config path")?, false) },
         Some("run") if args.len() >= 2 => {
             for a in &args[2..] { if !["--once", "--testing", "--dry-run", "--no-autolearn", "--no-notify"].contains(&a.as_str()) { return Err(format!("unknown option: {a}")); } }
-            run(&args[1], args.iter().any(|s| s == "--once"), args.iter().any(|s| s == "--testing"), args.iter().any(|s| s == "--dry-run"), !args.iter().any(|s| s == "--no-autolearn"), !args.iter().any(|s| s == "--no-notify"))
+            run(&args[1], args.iter().any(|s| s == "--once"), args.iter().any(|s| s == "--testing"), args.iter().any(|s| s == "--dry-run"), !args.iter().any(|s| s == "--no-autolearn"), !args.iter().any(|s| s == "--no-notify"), None)
         }
         _ => Err("Usage: aw-watcher-vpn snapshot <new-file|-> | evaluate <config> <snapshot> | learn <before> <after> <config> --name <customer> [--replace] | name <config> <connection-id> --name <customer> | run <config> [--dry-run] [--testing] [--once] [--no-autolearn] [--no-notify]".into()),
     }

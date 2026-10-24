@@ -1,6 +1,6 @@
 [package]
 name = "aw-watcher-vpn"
-version = "0.2.12"
+version = "1.0.0"
 edition = "2021"
 description = "Local Windows VPN network-context watcher for ActivityWatch"
 license = "MIT"

@@ -11,6 +11,8 @@ try {
     if ($Test) {
         & $cargoCommand test @cargoOptions --locked
         if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+        & $cargoCommand clippy @cargoOptions --locked --all-targets -- -D warnings
+        if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
     }
     & $cargoCommand build @cargoOptions --release --locked
     if ($LASTEXITCODE -ne 0) { throw 'Build failed' }

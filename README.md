@@ -1,5 +1,7 @@
 # ActivityWatch VPN context
 
+Version **1.0.0**. Module/client identity: `aw-watcher-vpn`.
+
 A Windows module managed by ActivityWatch that observes adapters, addresses, DNS configuration and routes. Learned rules associate connections with customer labels, including simultaneous profiles. These are assignment hints, not proof of authenticated VPN access, reachability or work duration.
 
 ## Requirements
@@ -24,6 +26,12 @@ Start ActivityWatch normally. **Modules → aw-watcher-vpn** controls the worker
 ## Configuration and everyday use
 
 Default config: `%LOCALAPPDATA%\activitywatch\activitywatch\aw-watcher-vpn\config.json`. `AW_PROFILE` selects an isolated root; testing selects port `5666` and `config-testing.json`. Normal delivery uses loopback port `5600`. Settings reload each poll.
+
+The AW-managed module and tray commands accept `--port <port>` (1–65535).
+It overrides the port in `AW_SERVER_URL`, retaining its loopback host; without a
+server override, the host is `127.0.0.1`. Combine it with `--testing` for testing
+isolation. Port selection never implies testing mode and is not stored in the
+profile configuration. Legacy `run <config>` retains its existing options.
 
 Polling defaults to 5 seconds (`poll_seconds`, range 2–60). Discovery and notifications are on by default (`autolearn` and `notify`). Open **Settings…** on a supporting tray, click a discovery notification, or run `name-connections.cmd` to name, rename, ignore or restore connections. Learning is optional; unnamed tunnel candidates can be detected without a profile. A reused connection name or overlapping network fingerprint may need more specific rules.
 

@@ -28,6 +28,9 @@ try {
     if($normal.testing -or $normal.config -notlike '*config.json'){throw 'Explicit testing false was not respected'}
     $manual=& $exe configure --testing --print-context | ConvertFrom-Json
     if(-not $manual.testing){throw 'Manual testing override failed'}
+    $withPort=& $exe configure --testing --port 7123 --print-context | ConvertFrom-Json
+    if($withPort.server_url -ne 'http://127.0.0.1:7123' -or -not $withPort.testing){throw 'Custom testing port precedence failed'}
+    Fail-Command @('configure','--port','0','--print-context')
     $explicit=Join-Path $fixture 'explicit.json'
     [IO.File]::WriteAllText($explicit,'{}')
     $lock=[IO.File]::Open($explicit+'.lock','OpenOrCreate','ReadWrite','None')

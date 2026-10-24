@@ -1,5 +1,10 @@
 # Event data contract and privacy
 
+Release 1.0.0 adds a process-only `--port` override to module/action commands. It
+changes no event fields, collection permissions, profile identities or matching
+evidence. Testing remains a separate explicit selection; port 5666 alone does not
+select a testing config. Local configuration/discovery files remain private.
+
 `vpn.context` is this module's custom bucket type, not an official ActivityWatch event-type standard. The official AW contract requires a UTC/RFC3339 `timestamp`, numeric `duration`, and object `data`; it does not prescribe VPN data fields. See the [AW data model](https://docs.activitywatch.net/en/latest/buckets-and-events.html) and [REST API](https://docs.activitywatch.net/en/latest/api/rest.html). Presence is network context, not foreground work duration or authenticated/reachable VPN access.
 
 Strict mode sends **only `title`**, required by this workspace in addition to the generic AW contract. There are no official VPN properties to put ahead of title. Extended mode sends title first, then selected custom extensions. Declaration order is tested in the serializer used for HTTP. JSON objects have no semantic order: actual AW storage/API reserialization and GUI tooltips have not been verified, and GUI ordering must be implemented in AW's presentation layer if necessary.

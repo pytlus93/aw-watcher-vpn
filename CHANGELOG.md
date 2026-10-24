@@ -1,15 +1,26 @@
 # Releases
 
-## 0.2.12 — 2026-10-20
+## 1.0.0 â€” 2026-10-24
+
+- Add `--port <port>` to the AW-managed module and management actions, preserving
+  profile/testing isolation and the loopback server host.
+- Keep passive matching, multiple customer connections, payload privacy defaults,
+  bucket/config identities and AW-owned lifecycle behavior unchanged.
+- Run locked Clippy alongside local tests in the build script and update synthetic
+  module/action checks for the versioned release.
+- Retain the existing bodyless 304/restart regressions and versioned Windows x64
+  package with SHA256 checksum. No live installation or reboot acceptance is implied.
+
+## 0.2.12 â€” 2026-10-20
 
 - Enable Delete connection for unnamed discoveries. Remove only the selected cached entry with a backup; preserve customer assignments, other discoveries and ignore settings.
 
-## 0.2.11 — 2026-10-20
+## 0.2.11 â€” 2026-10-20
 
 - Add Delete connection for an individual saved profile, with confirmation and configuration/discovery backups. Preserve sibling connections, ignore settings and recorded history.
 - Remove associated cached discoveries; explain that an active forgotten VPN may be discovered again and Ignore suppresses it instead.
 
-## 0.2.10 — 2026-10-20
+## 0.2.10 â€” 2026-10-20
 
 - Add independent VPN connection fingerprints to an existing customer by default; preserve old rules, IDs and history. Repeated assignment is idempotent.
 - Distinguish Add connection from Rename customer in Settings; rename all connections belonging to a customer together. Remove destructive replacement from the UI and reject ambiguous legacy CLI replacement.

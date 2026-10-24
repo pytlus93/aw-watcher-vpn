@@ -1,5 +1,38 @@
 # Complete connection inventory — 2026-10-12, version 0.2.8
 
+## Release 1.0.0 — 2026-10-24
+
+Local Rust 1.99.0 x86_64-pc-windows-msvc validation passes: 44 tests, locked
+all-target Clippy with warnings denied, optimized build and versioned Windows x64
+ZIP/SHA256. `scripts/build.ps1 -Test -Package -TargetDirectory target/updated` now
+includes Clippy. Cargo.lock changes only the package version. Some Cargo runs
+reported incremental-cache permission notes but completed successfully.
+
+The new `--port` option is accepted by module and management-action commands, with
+1–65535 validation and shared loopback host/port resolution. Synthetic action
+probes verify precedence over AW_SERVER_URL and explicit testing selection without
+opening dialogs or contacting a server. Config paths, matching rules, payload
+permissions and legacy development `run` options are unchanged.
+
+Both tests/module-smoke.ps1 and tests/module-actions.ps1 pass against the rebuilt
+executable. They isolate app data/profiles, use mock installations and invalidate
+SystemRoot before producer-lifetime probes so no live network snapshot is
+collected. Coverage includes installer preservation/idempotence, profile/testing
+isolation, config/payload persistence, duplicate rejection, owned crash/relaunch,
+intentional stop, failed launch, manifest matching and management dispatch.
+These are not installed aw-qt recovery or real VPN transition checks.
+
+Existing transport cases pass for first creation, bodyless creation-only 304 with
+Content-Length: 67 and a persistent open response, producer restart and actual
+subsequent heartbeat receipt, incompatible type, failures, redirects, late server,
+outage recovery, timestamps, bounded retries and privacy reload. No production AW
+or live VPN profile/data was inspected or changed. Fresh actual-server acceptance,
+interactive UI, live transitions and reboot/login remain unverified for 1.0.0.
+No deployment, push or release publication occurred.
+
+Three legacy Windows-1252 dash bytes in CHANGELOG.md and one in this file were
+converted to UTF-8 while preserving existing Unicode/text and historical entries.
+
 PASS: 40 Rust tests, Clippy, release package, action/module checks. Expanded management regressions check named rows remain listed, ignored rows remain visible and profile rename preserves matching rules/identity. Actual synthetic UI tests exercise naming, rename, visible ignored state and direct restore through the main selected-row button. Screenshot under local/ui-test-*/management.png.ignored.png was visually inspected. Settings shows last cached activity rather than authenticated VPN health; event privacy projection is unchanged. Imported profiles without discovery records remain editable as profile rows. Old unnamed CLI filtering is retained.
 
 Separate persistence diagnosis: the deployed Rust server uses a disk-backed database with WAL. Read-only bucket API counts confirmed historical events preceding server startup, including window/AFK/VPN data. This disproves wholesale deletion in the current database; it does not validate the user's specific empty timeline view. No history contents were exported and no database modified. The view identification question remains pending.
@@ -103,7 +136,7 @@ Normal-desktop Teams diagnostics show joined evidence becoming unknown during th
 Fresh scripts/build.ps1 -Test -Package -TargetDirectory target/updated PASS, followed by offline locked all-target Clippy with warnings denied. Forty Rust tests passed. tests/module-smoke.ps1 and tests/module-actions.ps1 passed using isolated synthetic installation/settings and owned child processes. Production AW contains positive-duration vpn.context events dated today with title-only data. Installed executable SHA256 differs from the fresh target/updated build; this alone does not identify a source-version difference. No VPN transitions, production restart, settings UI or reboot was exercised.
 
 
-## 2026-10-20 � multiple connections per customer (0.2.10)
+## 2026-10-20 — multiple connections per customer (0.2.10)
 
 42 Rust tests pass (23 adapter/management/transport, 19 detection), with Rust
 1.99.0; Clippy passes with warnings denied. Added regressions preserve the original

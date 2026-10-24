@@ -15,11 +15,32 @@ pub fn testing(cli: bool) -> Result<bool, String> {
         _ => Err("AW_TESTING must be 0 or 1".into()),
     }
 }
-pub fn server_url(testing: bool) -> Result<String, String> {
-    validate_server_url(
+pub fn parse_port(value: &str) -> Result<u16, String> {
+    value
+        .parse::<u16>()
+        .ok()
+        .filter(|p| *p > 0)
+        .ok_or_else(|| "Port must be 1–65535".into())
+}
+pub fn server_url(testing: bool, port: Option<u16>) -> Result<String, String> {
+    server_with_port(
         &std::env::var("AW_SERVER_URL")
             .unwrap_or_else(|_| format!("http://127.0.0.1:{}", if testing { 5666 } else { 5600 })),
+        port,
     )
+}
+fn server_with_port(value: &str, port: Option<u16>) -> Result<String, String> {
+    let server = validate_server_url(value)?;
+    if let Some(port) = port {
+        let authority = &server[7..];
+        let host = authority
+            .rsplit_once(':')
+            .map(|(h, _)| h)
+            .unwrap_or(authority);
+        Ok(format!("http://{host}:{port}"))
+    } else {
+        Ok(server)
+    }
 }
 fn validate_server_url(value: &str) -> Result<String, String> {
     let authority = value
@@ -54,11 +75,16 @@ pub fn dispatch(args: &[String]) -> Option<Result<(), String>> {
         let mut cli = false;
         let mut custom = None;
         let mut print = false;
+        let mut port = None;
         let mut i = 1;
         while i < args.len() {
             match args[i].as_str() {
                 "--testing" => cli = true,
                 "--print-context" => print = true,
+                "--port" if i + 1 < args.len() => {
+                    i += 1;
+                    port = Some(parse_port(&args[i])?);
+                }
                 "--config" if custom.is_none() && i + 1 < args.len() => {
                     i += 1;
                     custom = Some(std::path::PathBuf::from(&args[i]));
@@ -72,7 +98,7 @@ pub fn dispatch(args: &[String]) -> Option<Result<(), String>> {
         let context = LaunchContext {
             testing,
             profile: std::env::var("AW_PROFILE").unwrap_or_default(),
-            server_url: server_url(testing)?,
+            server_url: server_url(testing, port)?,
             config: custom.unwrap_or(default),
         };
         if print {
@@ -146,6 +172,17 @@ mod tests {
     }
     #[test]
     fn server_roots_are_loopback_only() {
+        assert_eq!(
+            server_with_port("http://localhost:5600", Some(7123)).unwrap(),
+            "http://localhost:7123"
+        );
+        assert_eq!(
+            server_with_port("http://[::1]:5666", Some(7123)).unwrap(),
+            "http://[::1]:7123"
+        );
+        for invalid in ["0", "65536", "-1", "bad", ""] {
+            assert!(parse_port(invalid).is_err());
+        }
         for value in [
             "http://127.0.0.1:7777/",
             "http://localhost:5600",
